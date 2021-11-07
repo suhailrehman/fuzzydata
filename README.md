@@ -1,2 +1,2 @@
-# fuzzy-databench
+# fuzzydata
 Fuzzy Data Benchmark
