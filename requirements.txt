@@ -1,2 +1,4 @@
 faker
 pandas
+networkx
+loguru
