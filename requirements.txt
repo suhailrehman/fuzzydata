@@ -3,3 +3,4 @@ pandas
 networkx
 loguru
 pytest
+pytest-cov
