@@ -1,0 +1,14 @@
+language: python
+python:
+  - "3.8"
+# command to install dependencies
+before_install:
+  - sudo apt-get update
+install:
+  - pip install -r requirements.txt
+# command to run tests
+script:
+  - pytest --cov=./
+# code coverage
+after_success:
+  - bash <(curl -s https://codecov.io/bash) -t fa43c2d1-12e9-4bd1-b40d-89beb6ac17cf

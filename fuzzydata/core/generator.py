@@ -6,12 +6,14 @@ import logging
 
 from functools import partial
 from typing import Callable, Dict
-from loguru import logger
+#from loguru import logger
 from faker import Faker
 from itertools import chain
 
 # Disable Faker log spam in DEBUG mode
 logging.getLogger('faker').setLevel(logging.ERROR)
+logger = logging.getLogger(__name__)
+
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _UNIQUE_DICTIONARY = string.ascii_letters+string.digits
@@ -38,7 +40,7 @@ def generate_prefix(symbol_dict: str, size: int=5) -> str:
 def generate_table(num_rows: int=100, column_dict: Dict=None) -> pd.DataFrame:
     faker = Faker()
     logger.info(f'Generating base df with {num_rows} rows and {len(column_dict.keys())} columns')
-    logger.trace(f'Column list: {column_dict.keys()}')
+    logger.debug(f'Column list: {column_dict.keys()}')
     series_list = []
     label_list = []
     for label, column in column_dict.items():
@@ -52,7 +54,7 @@ def generate_schema(num_cols: int, unique_prefix: Callable = partial(generate_pr
     random_selection = np.random.choice(_faker_cols, size=num_cols)
     column_dict.update({f'{unique_prefix()}__{r}': r for r in random_selection})
 
-    logger.trace(f'Selected columns for this schema: {column_dict.values()}')
+    logger.debug(f'Selected columns for this schema: {column_dict.values()}')
 
     # # Do not need inverse schema maps yet...
     # for col, faker_type in column_dict.items():

@@ -4,7 +4,7 @@ import pytest
 from fuzzydata.core.generator import generate_schema, generate_table
 
 
-@pytest.fixture(scope="module", params=[10, 15,20])
+@pytest.fixture(scope="module", params=[10, 15, 20])
 def schema(request):
     generated_schema = generate_schema(request.param)
     for col_name, faker_col_name in generated_schema.items():
