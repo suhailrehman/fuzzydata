@@ -2,3 +2,4 @@ faker
 pandas
 networkx
 loguru
+pytest
