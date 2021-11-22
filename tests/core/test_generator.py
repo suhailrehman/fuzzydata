@@ -14,7 +14,7 @@ def schema(request):
     return generated_schema
 
 
-@pytest.mark.parametrize('num_rows', [10,100,1000])
+@pytest.mark.parametrize('num_rows', [10, 100, 1000])
 def test_generate_table(schema, num_rows):
     table = generate_table(num_rows, column_dict=schema)
     assert isinstance(table, pd.DataFrame)

@@ -4,3 +4,4 @@ networkx
 loguru
 pytest
 pytest-cov
+SQLAlchemy
