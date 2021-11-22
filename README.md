@@ -3,6 +3,6 @@
 [![Twitter URL](https://img.shields.io/twitter/url/https/twitter.com/fold_left.svg?style=social&label=Follow%20%40suhailrehman)](https://twitter.com/suhailrehman)
 
 
-
-# fuzzydata
-Fuzzy Data Benchmark
+![fuzzydata](docs/logo.png)
+---------------------------
+The fuzzydata benchmark

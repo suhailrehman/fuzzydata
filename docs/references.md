@@ -8,3 +8,5 @@ This document outlines the general set of guides, how-tos and reference document
   * [Logging in an Application](https://docs.python-guide.org/writing/logging/#logging-in-an-application)
 * Code Syle and General Python
   * [The Hitchhiker's Guide to Python](https://docs.python-guide.org)
+* Logo Credits
+  * Font: [Diffuse-Away Font by Z-Designs](https://www.fontspace.com/diffuse-away-font-f13081)
