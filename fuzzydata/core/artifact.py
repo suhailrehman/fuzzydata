@@ -13,7 +13,7 @@ class Artifact(ABC):
         self.filename = filename
         self.label = label
         self.in_memory = in_memory
-        self.format = file_format
+        self.file_format = file_format
         self.schema_map = schema_map
         self.table = None
 
@@ -34,18 +34,17 @@ class Artifact(ABC):
 
 class DataFrameArtifact(Artifact):
 
-    def __init__(self):
-        super(DataFrameArtifact, self).__init__()
+    def __init__(self, *args, **kwargs):
+        super(DataFrameArtifact, self).__init__(*args, **kwargs)
         self._deserialization_function = {
             'csv': pd.read_csv
         }
         self._serialization_function = {
-            'csv': self.table.to_csv
+            'csv': 'to_csv'
         }
 
     def generate(self, num_rows, schema):
-        self.table = generate_table(num_rows, schema=schema)
-        pass
+        self.table = generate_table(num_rows, column_dict=schema)
 
     def deserialize(self):
         self.table = self._deserialization_function[self.file_format](self.filename)
@@ -53,6 +52,32 @@ class DataFrameArtifact(Artifact):
 
     def serialize(self):
         if self.in_memory:
-            self._serialization_function[self.file_format](self.filename)
+            serialization_method = getattr(self.table, self._serialization_function[self.file_format])
+            serialization_method(self.filename)
 
+
+
+class SQLArtifact(Artifact):
+
+    def __init__(self, *args, **kwargs):
+        super(DataFrameArtifact, self).__init__(*args, **kwargs)
+        self._deserialization_function = {
+            'csv': ...
+        }
+        self._serialization_function = {
+            'csv': ...
+        }
+
+    def generate(self, num_rows, schema):
+        df = generate_table(num_rows, column_dict=schema)
+        # Convert Dataframe to SQL Table with Schema conversion
+
+    def deserialize(self):
+        self.table = self._deserialization_function[self.file_format](self.filename)
+        self.in_memory = True
+
+    def serialize(self):
+        if self.in_memory:
+            serialization_method = getattr(self.table, self._serialization_function[self.file_format])
+            serialization_method(self.filename)
 
