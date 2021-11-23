@@ -8,19 +8,6 @@ from fuzzydata.core.artifact import DataFrameArtifact, SQLArtifact
 from fuzzydata.core.generator import generate_schema
 
 
-@pytest.fixture(scope="session")
-def dataframe_artifact(tmpdir_factory):
-    tmp_dir = tmpdir_factory.mktemp("fuzzydata_test")
-    return DataFrameArtifact('test_df', filename=tmp_dir.join('test_df.csv'))
-
-
-@pytest.fixture(scope="session")
-def sql_artifact(tmpdir_factory):
-    tmp_dir = tmpdir_factory.mktemp("fuzzydata_test")
-    sql_engine = sqlalchemy.create_engine(f"sqlite:///{tmp_dir}/fuzzydata_test.db")
-    return SQLArtifact('test_df', filename=tmp_dir.join('test_df.csv'), sql_engine=sql_engine)
-
-
 @pytest.mark.dependency()
 @pytest.mark.parametrize('artifact', ['dataframe_artifact', 'sql_artifact'])
 def test_generate(artifact, request):
