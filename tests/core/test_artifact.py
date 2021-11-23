@@ -2,9 +2,6 @@ import pandas as pd
 import pytest
 import os
 
-import sqlalchemy
-
-from fuzzydata.core.artifact import DataFrameArtifact, SQLArtifact
 from fuzzydata.core.generator import generate_schema
 
 

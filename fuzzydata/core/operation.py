@@ -1,6 +1,6 @@
 import math
 from abc import ABC, abstractmethod
-from typing import List, TypeVar, Generic
+from typing import List, TypeVar, Generic, Callable, Dict
 
 from fuzzydata.core.artifact import Artifact, DataFrameArtifact, SQLArtifact
 
@@ -8,7 +8,7 @@ T = TypeVar('T')
 
 
 class Operation(Generic[T], ABC):
-    def __new__(cls, sources: List[Artifact], new_label: str):
+    def __new__(cls, sources: List[Artifact], new_label: str, op: str, args: Dict):
         first_artifact = sources[0]
         subclass = None
         if isinstance(first_artifact, DataFrameArtifact):
@@ -19,15 +19,20 @@ class Operation(Generic[T], ABC):
         # instance.__init__(sources=sources, new_label=new_label)
         return instance
 
-    def __init__(self, sources: List[Artifact], new_label: str):
+    def __init__(self, sources: List[Artifact], new_label: str, op: str, args: Dict):
         self.sources = sources
         self.new_label = new_label
         self.dest_schema_map = None
+        self.op = getattr(self, op)
+        self.args = args
 
     @abstractmethod
     def sample(self, frac: float) -> T:
         self.dest_schema_map = self.sources[0].schema_map
         pass
+
+    def execute(self):
+        return self.op(**self.args)
 
     # @abstractmethod
     # def groupby(self, sources: Artifact, columns: List[str], agg_func: str) -> Artifact:
