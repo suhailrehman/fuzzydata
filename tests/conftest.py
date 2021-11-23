@@ -1,7 +1,8 @@
 import pytest
 import sqlalchemy
 
-from fuzzydata.core.artifact import DataFrameArtifact, SQLArtifact
+from fuzzydata.clients.sqlite import SQLArtifact
+from fuzzydata.clients.pandas import DataFrameArtifact
 from fuzzydata.core.generator import generate_schema
 
 

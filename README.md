@@ -5,4 +5,4 @@
 
 ![fuzzydata](docs/logo.png)
 ---------------------------
-The fuzzydata benchmark
+# The fuzzydata Workflow Generator

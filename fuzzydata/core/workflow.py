@@ -5,7 +5,9 @@ from typing import Dict, List
 import networkx as nx
 import sqlalchemy
 
-from fuzzydata.core.artifact import Artifact, DataFrameArtifact, SQLArtifact
+from fuzzydata.core.artifact import Artifact
+from fuzzydata.clients.sqlite import SQLArtifact, SQLOperation
+from fuzzydata.clients.pandas import DataFrameArtifact, DataFrameOperation
 from fuzzydata.core.generator import generate_schema
 from fuzzydata.core.operation import Operation
 
@@ -43,7 +45,10 @@ class Workflow:
 
         # Hack for SQL-based workflows - refactor for cleaner interface.
         if wf_type == 'sql':
+            self.operator_class = SQLOperation
             self.sql_engine = sqlalchemy.create_engine(f"sqlite:///{self.out_dir}/{self.name}.db")
+        elif wf_type == 'pandas':
+            self.operator_class = DataFrameOperation
 
     def generate_next_label(self):
         return f"artifact_{len(self)}"
@@ -108,7 +113,7 @@ class Workflow:
         :param args: dict containing all the parameters to be passed to the operation function.
         :return:
         """
-        operation = Operation(sources=artifacts, new_label=self.generate_next_label(), op=op, args=args)
+        operation = self.operator_class(sources=artifacts, new_label=self.generate_next_label(), op=op, args=args)
         new_artifact = operation.execute()
         self.add_artifact(new_artifact, from_artifacts=artifacts, operation=operation)
 
