@@ -3,10 +3,11 @@ import pytest
 import os
 
 from fuzzydata.core.generator import generate_schema
+from tests.conftest import artifact_fixtures
 
 
 @pytest.mark.dependency()
-@pytest.mark.parametrize('artifact', ['dataframe_artifact', 'sql_artifact'])
+@pytest.mark.parametrize('artifact', artifact_fixtures)
 def test_generate(artifact, request):
     tmp_schema = generate_schema(20)
     concrete_artifact = request.getfixturevalue(artifact)
@@ -14,7 +15,7 @@ def test_generate(artifact, request):
 
 
 @pytest.mark.dependency(depends=["test_generate"])
-@pytest.mark.parametrize('artifact', ['dataframe_artifact', 'sql_artifact'])
+@pytest.mark.parametrize('artifact', artifact_fixtures)
 def test_serialize_deserialize(artifact, request):
     concrete_artifact = request.getfixturevalue(artifact)
     df_file = concrete_artifact.filename
