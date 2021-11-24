@@ -1,13 +1,12 @@
 import os
 import logging
+from abc import ABC, abstractmethod
 from typing import Dict, List
 
 import networkx as nx
 import sqlalchemy
 
 from fuzzydata.core.artifact import Artifact
-from fuzzydata.clients.sqlite import SQLArtifact, SQLOperation
-from fuzzydata.clients.pandas import DataFrameArtifact, DataFrameOperation
 from fuzzydata.core.generator import generate_schema
 from fuzzydata.core.operation import Operation
 
@@ -15,17 +14,12 @@ from fuzzydata.core.operation import Operation
 logger = logging.getLogger(__name__)
 
 
-class Workflow:
+class Workflow(ABC):
     """
     Class to represent a workflow in fuzzydata, Extends DiGraph from networkx with additional metadata about
     the workflow as required.
     """
-    _wf_artifact_mapping = {
-        'pandas': DataFrameArtifact,
-        'sql': SQLArtifact
-    }
-
-    def __init__(self, name='wf', out_directory='/tmp/fuzzydata/wf/', wf_type='pandas'):
+    def __init__(self, name='wf', out_directory='/tmp/fuzzydata/wf/'):
         """
         Create a new workflow with a specified name
         :param name: Name of the workflow
@@ -40,28 +34,18 @@ class Workflow:
         os.makedirs(self.artifact_dir, exist_ok=True)
         self.artifact_list = []
         self.artifact_dict = {}
-        self.artifact_class = self._wf_artifact_mapping[wf_type]
-        logger.info(f'Creating new Workflow {self.name}')
 
-        # Hack for SQL-based workflows - refactor for cleaner interface.
-        if wf_type == 'sql':
-            self.operator_class = SQLOperation
-            self.sql_engine = sqlalchemy.create_engine(f"sqlite:///{self.out_dir}/{self.name}.db")
-        elif wf_type == 'pandas':
-            self.operator_class = DataFrameOperation
+        self.artifact_class = None
+        self.operator_class = None
+
+        logger.info(f'Creating new Workflow {self.name}')
 
     def generate_next_label(self):
         return f"artifact_{len(self)}"
 
+    @abstractmethod
     def initialize_new_artifact(self, label=None, filename=None):
-        if not filename:
-            filename = f"{self.artifact_dir}/{label}.csv"
-        if not label:
-            label = self.generate_next_label()
-        if self.artifact_class == SQLArtifact:
-            return SQLArtifact(label, filename=filename, sql_engine=self.sql_engine)
-        else:
-            return DataFrameArtifact(label, filename=filename)
+        pass
 
     def add_artifact(self, artifact: Artifact, from_artifacts: List[Artifact] = None, operation: Operation = None) -> None:
         """
@@ -100,8 +84,9 @@ class Workflow:
         """
         if not column_maps:
             column_maps = generate_schema(num_cols)
-
-        new_artifact = self.initialize_new_artifact(label=label)
+        if not label:
+            label = self.generate_next_label()
+        new_artifact = self.initialize_new_artifact(label=label, filename=f"{self.artifact_dir}/{label}.csv")
         new_artifact.generate(num_rows, column_maps)
         self.add_artifact(new_artifact)
 

@@ -1,19 +1,20 @@
 import pytest
 
 from fuzzydata.core.artifact import Artifact
-from fuzzydata.core.workflow import Workflow
+from fuzzydata.clients.pandas import DataFrameWorkflow
+from fuzzydata.clients.sqlite import SQLWorkflow
 
 
 @pytest.fixture(scope='session')
 def df_workflow(tmpdir_factory):
     out_dir = tmpdir_factory.mktemp('fuzzydata_temp_wf_df')
-    return Workflow(name='test_wf', out_directory=out_dir, wf_type='pandas')
+    return DataFrameWorkflow(name='test_wf', out_directory=out_dir)
 
 
 @pytest.fixture(scope='session')
 def sql_workflow(tmpdir_factory):
     out_dir = tmpdir_factory.mktemp('fuzzydata_temp_wf_df')
-    return Workflow(name='test_wf', out_directory=out_dir, wf_type='sql')
+    return SQLWorkflow(name='test_wf', out_directory=out_dir)
 
 
 @pytest.mark.dependency()
