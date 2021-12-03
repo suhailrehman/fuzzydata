@@ -1,6 +1,11 @@
-# Class Heirarchy
+# fuzzydata Design Notes
 
+## Base Classes
 * Artifact
-  * DataFrameArtifact
-  * SQLArtifact
 * Operations
+* Workflow
+
+## Clients
+* SQLite
+* Pandas
+
