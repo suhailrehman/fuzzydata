@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 import pandas
@@ -6,6 +7,8 @@ from fuzzydata.core.artifact import Artifact
 from fuzzydata.core.generator import generate_table
 from fuzzydata.core.operation import Operation, T
 from fuzzydata.core.workflow import Workflow
+
+logger = logging.getLogger(__name__)
 
 
 class DataFrameArtifact(Artifact):
@@ -24,6 +27,7 @@ class DataFrameArtifact(Artifact):
 
     def generate(self, num_rows, schema):
         self.table = generate_table(num_rows, column_dict=schema, pd=self.pd)
+        self.schema_map = schema
         self.in_memory = True
 
     def deserialize(self, filename=None):
@@ -64,9 +68,11 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
 
     def groupby(self, group_columns: List[str], agg_columns: List[str], agg_function: str) -> T:
         super(DataFrameOperation, self).groupby(group_columns, agg_columns, agg_function)
-        groupby_object = self.sources[0].table[group_columns+agg_columns].groupby(by=group_columns)
+        logger.info(list(group_columns)+list(agg_columns))
+        groupby_instance = getattr(self.sources[0].table[list(group_columns)+list(agg_columns)].groupby(group_columns),
+                                 agg_function)
         return DataFrameArtifact(label=self.new_label,
-                                 from_df=getattr(groupby_object, agg_function)(),
+                                 from_df=groupby_instance(),
                                  schema_map=self.dest_schema_map)
 
     def project(self, output_cols: List[str]) -> T:

@@ -27,7 +27,7 @@ class Operation(Generic[T], ABC):
 
     @abstractmethod
     def groupby(self, group_columns: List[str], agg_columns: List[str], agg_function: str) -> T:
-        output_cols = group_columns+agg_columns
+        output_cols = list(group_columns) + list(agg_columns)
         self.dest_schema_map = dict(filter(lambda x: x[0] in output_cols, self.sources[0].schema_map.items()))
         pass
 

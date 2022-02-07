@@ -4,4 +4,4 @@ networkx
 pytest
 pytest-cov
 SQLAlchemy
-modin
+modin[all]

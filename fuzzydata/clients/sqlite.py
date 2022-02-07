@@ -41,6 +41,7 @@ class SQLArtifact(Artifact):
     def generate(self, num_rows, schema):
         df = generate_table(num_rows, column_dict=schema)
         df.to_sql(self.label, con=self.sql_engine, if_exists='replace')
+        self.schema_map = schema
         if self.sync_df:
             self.table = df
         # self.in_memory = True
@@ -95,7 +96,7 @@ class SQLOperation(Operation['SQLArtifact']):
         super(SQLOperation, self).groupby(group_columns, agg_columns, agg_function)
         group_cols_str = ','.join(group_columns)
         agg_cols_str = f"{agg_function}({','.join(agg_columns)})"
-        sql_groupby_stmt = f"CREATE TABLE {self.new_label} AS SELECT {group_cols_str}, {agg_cols_str}" \
+        sql_groupby_stmt = f"CREATE TABLE {self.new_label} AS SELECT {group_cols_str}, {agg_cols_str} " \
                            f"FROM {self.sources[0].label} " \
                            f"GROUP BY {','.join(group_columns)} "
         return SQLArtifact(label=self.new_label,
@@ -105,7 +106,10 @@ class SQLOperation(Operation['SQLArtifact']):
 
     def project(self, output_cols: List[str]) -> T:
         super(SQLOperation, self).project(output_cols)
-        sql_project_stmt = f"CREATE TABLE {self.new_label} AS SELECT {output_cols} FROM {self.sources[0].label} "
+
+        project_predicate = ','.join(output_cols)
+
+        sql_project_stmt = f"CREATE TABLE {self.new_label} AS SELECT {project_predicate} FROM {self.sources[0].label} "
         return SQLArtifact(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
                            from_sql=sql_project_stmt,
