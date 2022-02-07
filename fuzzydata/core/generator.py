@@ -8,7 +8,6 @@ import logging
 
 from functools import partial
 from typing import Callable, Dict
-#from loguru import logger
 from faker import Faker
 from itertools import chain
 
@@ -75,6 +74,17 @@ def generate_schema(num_cols: int, unique_prefix: Callable = partial(generate_pr
     # logger.debug(f'Inverse ColumnType Mapping: {self.inv_coltype_mapping}')
 
     return column_dict
+
+def get_schema_type_mapping(column_dict):
+    # Do not need inverse schema maps yet...
+    schema_type_mapping = defaultdict(list)
+    for col, faker_type in column_dict.items():
+        for col_type in _inv_gen_functions[faker_type]:
+            schema_type_mapping[col_type].append(col)
+
+    logger.debug(f'Inverse ColumnType Mapping: {schema_type_mapping}')
+
+    return schema_type_mapping
 
 
 def select_rand_cols(columns, num, col_type=None):

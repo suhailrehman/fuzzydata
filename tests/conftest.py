@@ -7,8 +7,26 @@ from fuzzydata.clients.sqlite import SQLArtifact, SQLWorkflow
 from fuzzydata.clients.pandas import DataFrameArtifact, DataFrameWorkflow
 from fuzzydata.core.generator import generate_schema
 
-artifact_fixtures = ['dataframe_artifact', 'sql_artifact' , 'modin_artifact']
-generated_artifact_fixtures = ['dataframe_artifact_generated', 'sql_artifact_generated']
+_static_schema_test = {'EafKN__rgb_color': 'rgb_color',
+                       'RFD4U__uuid4': 'uuid4',
+                       'M8OoL__postcode': 'postcode',
+                       'Qe0kk__ipv4_network_class': 'ipv4_network_class',
+                       'qL81j__domain_name': 'domain_name',
+                       'a0UaD__zipcode_in_state': 'zipcode_in_state',
+                       'dHchx__suffix_female': 'suffix_female',
+                       '8b5GZ__uri_page': 'uri_page',
+                       'Vg4hn__name_male': 'name_male',
+                       'dwdle__zipcode_plus4': 'zipcode_plus4',
+                       'Vyl6E__text': 'text',
+                       'AqhyH__century': 'century',
+                       'zmpoV__randomize_nb_elements': 'randomize_nb_elements',
+                       'mRIWF__postalcode_in_state': 'postalcode_in_state',
+                       '9YjpC__credit_card_provider': 'credit_card_provider'}
+
+
+artifact_fixtures = ['dataframe_artifact', 'sql_artifact', 'modin_artifact']
+generated_artifact_fixtures = ['dataframe_artifact_generated', 'sql_artifact_generated', 'modin_artifact_generated']
+static_artifact_fixtures = ['dataframe_artifact_static', 'sql_artifact_static', 'modin_artifact_static']
 workflow_fixtures = ['df_workflow', 'sql_workflow', 'modin_workflow']
 
 
@@ -46,10 +64,29 @@ def sql_artifact_generated(sql_artifact):
 
 
 @pytest.fixture(scope="session")
-def modin_artifact_generated(sql_artifact):
+def modin_artifact_generated(modin_artifact):
     tmp_schema = generate_schema(20)
-    modin_artifact.generate(100, tmp_schema, pd=modin.pandas)
+    modin_artifact.generate(100, tmp_schema)
+    return modin_artifact
+
+
+@pytest.fixture(scope="session")
+def dataframe_artifact_static(dataframe_artifact):
+    dataframe_artifact.generate(100, _static_schema_test)
+    return dataframe_artifact
+
+
+@pytest.fixture(scope="session")
+def sql_artifact_static(sql_artifact):
+    sql_artifact.generate(100, _static_schema_test)
     return sql_artifact
+
+
+@pytest.fixture(scope="session")
+def modin_artifact_static(modin_artifact):
+    modin_artifact.generate(100, _static_schema_test)
+    return modin_artifact
+
 
 
 @pytest.fixture(scope='session')

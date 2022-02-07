@@ -11,8 +11,8 @@ from fuzzydata.core.workflow import Workflow
 class DataFrameArtifact(Artifact):
 
     def __init__(self, *args, **kwargs):
+        self.pd = kwargs.pop("pd", pandas)
         super(DataFrameArtifact, self).__init__(*args, **kwargs)
-        self.pd = pandas
         self._deserialization_function = {
             'csv': self.pd.read_csv
         }
