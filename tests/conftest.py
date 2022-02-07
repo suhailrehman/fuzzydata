@@ -1,19 +1,27 @@
 import pytest
 import sqlalchemy
+import modin.pandas
 
+from fuzzydata.clients.modin import ModinArtifact, ModinWorkflow
 from fuzzydata.clients.sqlite import SQLArtifact, SQLWorkflow
 from fuzzydata.clients.pandas import DataFrameArtifact, DataFrameWorkflow
 from fuzzydata.core.generator import generate_schema
 
-artifact_fixtures = ['dataframe_artifact', 'sql_artifact']
+artifact_fixtures = ['dataframe_artifact', 'sql_artifact' , 'modin_artifact']
 generated_artifact_fixtures = ['dataframe_artifact_generated', 'sql_artifact_generated']
-workflow_fixtures = ['df_workflow', 'sql_workflow']
+workflow_fixtures = ['df_workflow', 'sql_workflow', 'modin_workflow']
 
 
 @pytest.fixture(scope="session")
 def dataframe_artifact(tmpdir_factory):
     tmp_dir = tmpdir_factory.mktemp("fuzzydata_test")
     return DataFrameArtifact('test_df', filename=tmp_dir.join('test_df.csv'))
+
+
+@pytest.fixture(scope="session")
+def modin_artifact(tmpdir_factory):
+    tmp_dir = tmpdir_factory.mktemp("fuzzydata_test")
+    return ModinArtifact('test_df', filename=tmp_dir.join('test_df.csv'))
 
 
 @pytest.fixture(scope="session")
@@ -37,13 +45,26 @@ def sql_artifact_generated(sql_artifact):
     return sql_artifact
 
 
+@pytest.fixture(scope="session")
+def modin_artifact_generated(sql_artifact):
+    tmp_schema = generate_schema(20)
+    modin_artifact.generate(100, tmp_schema, pd=modin.pandas)
+    return sql_artifact
+
+
 @pytest.fixture(scope='session')
 def df_workflow(tmpdir_factory):
     out_dir = tmpdir_factory.mktemp('fuzzydata_temp_wf_df')
-    return DataFrameWorkflow(name='test_wf', out_directory=out_dir)
+    return DataFrameWorkflow(name='test_df_wf', out_directory=out_dir)
 
 
 @pytest.fixture(scope='session')
 def sql_workflow(tmpdir_factory):
     out_dir = tmpdir_factory.mktemp('fuzzydata_temp_wf_df')
-    return SQLWorkflow(name='test_wf', out_directory=out_dir)
+    return SQLWorkflow(name='test_sql_wf', out_directory=out_dir)
+
+
+@pytest.fixture(scope='session')
+def modin_workflow(tmpdir_factory):
+    out_dir = tmpdir_factory.mktemp('fuzzydata_temp_wf_df')
+    return ModinWorkflow(name='test_modin_wf', out_directory=out_dir)

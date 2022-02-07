@@ -1,7 +1,7 @@
 import math
 from typing import List
 
-import pandas as pd
+import pandas
 import sqlalchemy
 
 from fuzzydata.core.artifact import Artifact
@@ -20,9 +20,10 @@ class SQLArtifact(Artifact):
         super(SQLArtifact, self).__init__(*args, **kwargs)
 
         self.operation_class = SQLOperation
+        self.pd = pandas
 
         self._deserialization_function = {
-            'csv': pd.read_csv
+            'csv': self.pd.read_csv
         }
         self._serialization_function = {
             'csv': 'to_csv'
@@ -35,7 +36,7 @@ class SQLArtifact(Artifact):
         if self.from_sql:
             self.sql_engine.execute(self.from_sql)
             if self.sync_df:
-                self.table = pd.read_sql(self._get_table, con=self.sql_engine)
+                self.table = self.pd.read_sql(self._get_table, con=self.sql_engine)
 
     def generate(self, num_rows, schema):
         df = generate_table(num_rows, column_dict=schema)
@@ -58,7 +59,7 @@ class SQLArtifact(Artifact):
         if not filename:
             filename = self.filename
 
-        df = pd.read_sql(self._get_table, con=self.sql_engine)
+        df = self.pd.read_sql(self._get_table, con=self.sql_engine)
         serialization_method = getattr(df, self._serialization_function[self.file_format])
         serialization_method(filename)
 
@@ -67,8 +68,8 @@ class SQLArtifact(Artifact):
             del self.table
         self.sql_engine.execute(self._del_table)
 
-    def to_df(self) -> pd.DataFrame:
-        return pd.read_sql(self._get_table, con=self.sql_engine)
+    def to_df(self):
+        return self.pd.read_sql(self._get_table, con=self.sql_engine)
 
     def __len__(self):
         return self.sql_engine.execute(self._num_rows).first()[0]

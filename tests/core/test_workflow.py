@@ -1,10 +1,13 @@
 import glob
 import os.path
-
+import logging
 import pytest
 
 from fuzzydata.core.artifact import Artifact
 from tests.conftest import workflow_fixtures
+
+# Disable Faker log spam in DEBUG mode
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.dependency()
@@ -38,12 +41,12 @@ def test_generate_artifact_from_operation(abstract_workflow, request):
 def test_serialize_deserialize_workflow(abstract_workflow, request, tmpdir_factory):
     workflow = request.getfixturevalue(abstract_workflow)
     output_path = tmpdir_factory.mktemp(workflow.name)
-    # print(output_path)
+    logger.info(f'Output Dir {output_path}')
 
     workflow.serialize_workflow(output_dir=output_path)
 
     assert os.path.exists(f"{output_path}/artifacts/")
-    assert len(workflow.artifact_dict) == len(list(glob.glob(f"{output_path}/artifacts/*.csv")))
+    assert len(list(glob.glob(f"{output_path}/artifacts/*.csv"))) == len(workflow.artifact_dict)
     assert os.path.exists(f"{output_path}/{workflow.name}_operations.json")
     assert os.path.getsize(f"{output_path}/{workflow.name}_operations.json") > 0
     assert os.path.exists(f"{output_path}/{workflow.name}_gt_graph.csv")

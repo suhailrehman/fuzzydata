@@ -137,7 +137,7 @@ class Workflow(ABC):
 
         # Write out all artifacts
         for label, artifact in self.artifact_dict.items():
-            # print(label, artifact.label)
+            logger.debug(f"Serialization {label}, {artifact.label}")
             artifact.serialize(filename=f"{artifact_dir}/{label}.{artifact.file_format}")
 
         # Write out Operation List JSON

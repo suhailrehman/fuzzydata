@@ -15,7 +15,7 @@ class Artifact(ABC):
         self.in_memory = in_memory
         self.file_format = file_format
         self.schema_map = schema_map
-        if isinstance(from_df, pd.DataFrame):
+        if from_df is not None:
             self.table = from_df
             self.in_memory = True
 

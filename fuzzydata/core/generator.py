@@ -2,7 +2,7 @@ import os
 import string
 from collections import defaultdict
 
-import pandas as pd
+import pandas
 import numpy as np
 import logging
 
@@ -48,7 +48,7 @@ def generate_prefix(symbol_dict: str, size: int=5) -> str:
     return ''.join(np.random.choice(list(symbol_dict), size))
 
 
-def generate_table(num_rows: int=100, column_dict: Dict=None) -> pd.DataFrame:
+def generate_table(num_rows: int=100, column_dict: Dict=None, pd=pandas) -> pandas.DataFrame:
     faker = Faker()
     logger.info(f'Generating base df with {num_rows} rows and {len(column_dict.keys())} columns')
     logger.debug(f'Column list: {column_dict.keys()}')

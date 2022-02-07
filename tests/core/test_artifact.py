@@ -23,4 +23,4 @@ def test_serialize_deserialize(artifact, request):
     assert os.path.exists(df_file)
     concrete_artifact.destroy()
     concrete_artifact.deserialize()
-    assert isinstance(concrete_artifact.to_df(), pd.DataFrame)
+    assert isinstance(concrete_artifact.to_df(), concrete_artifact.pd.DataFrame)

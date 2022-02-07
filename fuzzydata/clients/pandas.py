@@ -1,6 +1,6 @@
 from typing import List
 
-import pandas as pd
+import pandas
 
 from fuzzydata.core.artifact import Artifact
 from fuzzydata.core.generator import generate_table
@@ -12,8 +12,9 @@ class DataFrameArtifact(Artifact):
 
     def __init__(self, *args, **kwargs):
         super(DataFrameArtifact, self).__init__(*args, **kwargs)
+        self.pd = pandas
         self._deserialization_function = {
-            'csv': pd.read_csv
+            'csv': self.pd.read_csv
         }
         self._serialization_function = {
             'csv': 'to_csv'
@@ -22,7 +23,7 @@ class DataFrameArtifact(Artifact):
         self.operation_class = DataFrameOperation
 
     def generate(self, num_rows, schema):
-        self.table = generate_table(num_rows, column_dict=schema)
+        self.table = generate_table(num_rows, column_dict=schema, pd=self.pd)
         self.in_memory = True
 
     def deserialize(self, filename=None):
@@ -43,7 +44,7 @@ class DataFrameArtifact(Artifact):
     def destroy(self):
         del self.table
 
-    def to_df(self) -> pd.DataFrame:
+    def to_df(self) -> pandas.DataFrame:
         return self.table
 
     def __len__(self):
