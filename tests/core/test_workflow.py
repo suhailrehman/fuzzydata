@@ -1,3 +1,6 @@
+import glob
+import os.path
+
 import pytest
 
 from fuzzydata.core.artifact import Artifact
@@ -29,3 +32,23 @@ def test_generate_artifact_from_operation(abstract_workflow, request):
     assert isinstance(workflow.artifact_dict[new_label], Artifact)
     assert new_label in workflow.graph.nodes()
 
+
+@pytest.mark.dependency(depends=['test_generate_artifact_from_operation'])
+@pytest.mark.parametrize('abstract_workflow', workflow_fixtures)
+def test_serialize_deserialize_workflow(abstract_workflow, request, tmpdir_factory):
+    workflow = request.getfixturevalue(abstract_workflow)
+    output_path = tmpdir_factory.mktemp(workflow.name)
+    # print(output_path)
+
+    workflow.serialize_workflow(output_dir=output_path)
+
+    assert os.path.exists(f"{output_path}/artifacts/")
+    assert len(workflow.artifact_dict) == len(list(glob.glob(f"{output_path}/artifacts/*.csv")))
+    assert os.path.exists(f"{output_path}/{workflow.name}_operations.json")
+    assert os.path.getsize(f"{output_path}/{workflow.name}_operations.json") > 0
+    assert os.path.exists(f"{output_path}/{workflow.name}_gt_graph.csv")
+
+    # Testing deserialization (same workflow type)
+    new_out_dir = tmpdir_factory.mktemp('replay_wf')
+    new_wf_cls = workflow.__class__
+    new_wf_cls.load_workflow(output_path, new_out_dir, replay=True)

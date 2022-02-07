@@ -9,6 +9,7 @@ artifact_fixtures = ['dataframe_artifact', 'sql_artifact']
 generated_artifact_fixtures = ['dataframe_artifact_generated', 'sql_artifact_generated']
 workflow_fixtures = ['df_workflow', 'sql_workflow']
 
+
 @pytest.fixture(scope="session")
 def dataframe_artifact(tmpdir_factory):
     tmp_dir = tmpdir_factory.mktemp("fuzzydata_test")
@@ -40,6 +41,7 @@ def sql_artifact_generated(sql_artifact):
 def df_workflow(tmpdir_factory):
     out_dir = tmpdir_factory.mktemp('fuzzydata_temp_wf_df')
     return DataFrameWorkflow(name='test_wf', out_directory=out_dir)
+
 
 @pytest.fixture(scope='session')
 def sql_workflow(tmpdir_factory):

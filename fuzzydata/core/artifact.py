@@ -26,11 +26,11 @@ class Artifact(ABC):
         pass
 
     @abstractmethod
-    def deserialize(self):
+    def deserialize(self, filename):
         pass
 
     @abstractmethod
-    def serialize(self):
+    def serialize(self, filename):
         pass
 
     @abstractmethod
@@ -43,5 +43,3 @@ class Artifact(ABC):
 
     def __repr__(self):
         return f"Artifact(label={self.label})"
-
-

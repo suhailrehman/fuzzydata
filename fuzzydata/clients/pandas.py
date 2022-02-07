@@ -25,14 +25,20 @@ class DataFrameArtifact(Artifact):
         self.table = generate_table(num_rows, column_dict=schema)
         self.in_memory = True
 
-    def deserialize(self):
-        self.table = self._deserialization_function[self.file_format](self.filename)
+    def deserialize(self, filename=None):
+        if not filename:
+            filename = self.filename
+
+        self.table = self._deserialization_function[self.file_format](filename)
         self.in_memory = True
 
-    def serialize(self):
+    def serialize(self, filename=None):
+        if not filename:
+            filename = self.filename
+
         if self.in_memory:
             serialization_method = getattr(self.table, self._serialization_function[self.file_format])
-            serialization_method(self.filename)
+            serialization_method(filename)
 
     def destroy(self):
         del self.table
@@ -73,7 +79,7 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
 
     def merge(self, key_col: List[str]) -> T:
         super(DataFrameOperation, self).merge(key_col)
-        merge_result = self.sources[0].table.merge(self.source[1].table, on=key_col)
+        merge_result = self.sources[0].table.merge(self.sources[1].table, on=key_col)
         return DataFrameArtifact(label=self.new_label,
                                  from_df=merge_result,
                                  schema_map=self.dest_schema_map)
@@ -101,4 +107,3 @@ class DataFrameWorkflow(Workflow):
 
     def initialize_new_artifact(self, label=None, filename=None):
         return DataFrameArtifact(label, filename=filename)
-

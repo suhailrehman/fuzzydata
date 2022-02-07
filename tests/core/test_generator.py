@@ -19,8 +19,3 @@ def test_generate_table(schema, num_rows):
     table = generate_table(num_rows, column_dict=schema)
     assert isinstance(table, pd.DataFrame)
     assert num_rows == len(table.index)
-
-
-
-
-

@@ -39,27 +39,31 @@ class SQLArtifact(Artifact):
         df = generate_table(num_rows, column_dict=schema)
         df.to_sql(self.label, con=self.sql_engine, if_exists='replace')
         self.table = df
-        self.in_memory = True
+        # self.in_memory = True
 
-    def deserialize(self):
-        df = self._deserialization_function[self.file_format](self.filename)
+    def deserialize(self, filename=None):
+        if not filename:
+            filename = self.filename
+
+        df = self._deserialization_function[self.file_format](filename)
         df.to_sql(self.label, con=self.sql_engine)
         self.table = df
-        self.in_memory = True
+        # self.in_memory = True
 
-    def serialize(self):
-        if self.in_memory:
-            df = pd.read_sql(self._get_table, con=self.sql_engine)
-            serialization_method = getattr(df, self._serialization_function[self.file_format])
-            serialization_method(self.filename)
+    def serialize(self, filename=None):
+        if not filename:
+            filename = self.filename
+
+        df = pd.read_sql(self._get_table, con=self.sql_engine)
+        serialization_method = getattr(df, self._serialization_function[self.file_format])
+        serialization_method(filename)
 
     def destroy(self):
         del self.table
         self.sql_engine.execute(self._del_table)
 
     def __len__(self):
-        if self.in_memory:
-            return self.sql_engine.execute(self._num_rows).first()[0]
+        return self.sql_engine.execute(self._num_rows).first()[0]
 
 
 class SQLOperation(Operation['SQLArtifact']):
@@ -136,4 +140,3 @@ class SQLWorkflow(Workflow):
 
     def initialize_new_artifact(self, label=None, filename=None):
         return SQLArtifact(label, filename=filename, sql_engine=self.sql_engine)
-
