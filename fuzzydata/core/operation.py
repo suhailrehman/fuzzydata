@@ -1,3 +1,4 @@
+import time
 from abc import ABC, abstractmethod
 from typing import List, TypeVar, Generic, Dict
 
@@ -14,6 +15,10 @@ class Operation(Generic[T], ABC):
         self.dest_schema_map = None
         self.op = getattr(self, op)
         self.args = args
+
+        # Operation Timings
+        self.start_time = None
+        self.end_time = None
 
     @abstractmethod
     def sample(self, frac: float) -> T:
@@ -47,7 +52,13 @@ class Operation(Generic[T], ABC):
         pass
 
     def execute(self) -> None:
-        return self.op(**self.args)
+        self.start_time = time.perf_counter()
+        result = self.op(**self.args)
+        self.end_time = time.perf_counter()
+        return result
+
+    def get_execution_time(self):
+        return self.end_time - self.start_time
 
     def to_dict(self) -> dict:
         return {

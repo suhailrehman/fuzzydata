@@ -15,6 +15,7 @@ class SQLArtifact(Artifact):
     def __init__(self, *args, **kwargs):
         self.sql_engine = kwargs.pop("sql_engine")
         self.from_sql = kwargs.pop("from_sql", None)
+        self.sync_df = kwargs.pop("sync_df", False)
 
         super(SQLArtifact, self).__init__(*args, **kwargs)
 
@@ -33,12 +34,14 @@ class SQLArtifact(Artifact):
 
         if self.from_sql:
             self.sql_engine.execute(self.from_sql)
-            self.table = pd.read_sql(self._get_table, con=self.sql_engine)
+            if self.sync_df:
+                self.table = pd.read_sql(self._get_table, con=self.sql_engine)
 
     def generate(self, num_rows, schema):
         df = generate_table(num_rows, column_dict=schema)
         df.to_sql(self.label, con=self.sql_engine, if_exists='replace')
-        self.table = df
+        if self.sync_df:
+            self.table = df
         # self.in_memory = True
 
     def deserialize(self, filename=None):
@@ -46,8 +49,9 @@ class SQLArtifact(Artifact):
             filename = self.filename
 
         df = self._deserialization_function[self.file_format](filename)
-        df.to_sql(self.label, con=self.sql_engine)
-        self.table = df
+        df.to_sql(self.label, con=self.sql_engine, if_exists='replace')
+        if self.sync_df:
+            self.table = df
         # self.in_memory = True
 
     def serialize(self, filename=None):
@@ -59,8 +63,12 @@ class SQLArtifact(Artifact):
         serialization_method(filename)
 
     def destroy(self):
-        del self.table
+        if self.sync_df:
+            del self.table
         self.sql_engine.execute(self._del_table)
+
+    def to_df(self) -> pd.DataFrame:
+        return pd.read_sql(self._get_table, con=self.sql_engine)
 
     def __len__(self):
         return self.sql_engine.execute(self._num_rows).first()[0]

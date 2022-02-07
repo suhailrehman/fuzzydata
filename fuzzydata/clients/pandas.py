@@ -43,6 +43,9 @@ class DataFrameArtifact(Artifact):
     def destroy(self):
         del self.table
 
+    def to_df(self) -> pd.DataFrame:
+        return self.table
+
     def __len__(self):
         if self.in_memory:
             return len(self.table.index)

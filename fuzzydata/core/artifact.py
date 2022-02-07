@@ -41,5 +41,9 @@ class Artifact(ABC):
     def __len__(self):
         pass
 
+    @abstractmethod
+    def to_df(self) -> pd.DataFrame:
+        pass
+
     def __repr__(self):
         return f"Artifact(label={self.label})"

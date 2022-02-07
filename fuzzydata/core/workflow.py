@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List
 
 import networkx as nx
+import pandas as pd
 
 from fuzzydata.core.artifact import Artifact
 from fuzzydata.core.generator import generate_schema
@@ -42,6 +43,8 @@ class Workflow(ABC):
         self.operator_class = None
 
         self.operation_list = []
+
+        self.perf_df = pd.DataFrame()
 
         logger.info(f'Creating new Workflow {self.name}')
 
@@ -116,6 +119,17 @@ class Workflow(ABC):
         # Add operation to op list
         self.operation_list.append(operation.to_dict())
 
+        # Add performance information
+        self.perf_df = self.perf_df.append({
+            'src': [x.label for x in artifacts],
+            'dst': [new_label],
+            'op': op,
+            'args': args,
+            'start_time': operation.start_time,
+            'end_time' : operation.end_time,
+            'elapsed_time': operation.get_execution_time()
+        }, ignore_index=True).reset_index(drop=True)
+
     def serialize_workflow(self, output_dir: str) -> None:
         # Create Output Directories
         artifact_dir = f"{output_dir}/artifacts/"
@@ -148,6 +162,7 @@ class Workflow(ABC):
 
             if replay:
                 workflow.replay_op_list(artifact_dir, op_list=ops['operation_list'])
+                workflow.write_perf()
 
             workflow.graph = nx.read_edgelist(f"{input_dir}/{workflow.name}_gt_graph.csv")
 
@@ -166,6 +181,12 @@ class Workflow(ABC):
 
             self.generate_artifact_from_operation([self.artifact_dict[x] for x in op['sources']],
                                                   op['op'], op['args'], new_label=op['new_label'])
+
+    def write_perf(self, filename=None):
+        if not filename:
+            filename = f"{self.out_dir}/{self.name}_perf.csv"
+
+        self.perf_df.to_csv(filename)
 
     def __len__(self):
         return len(self.artifact_list)
