@@ -187,7 +187,14 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int) -> Dict[str, Dic
     if num_rows >= 10:
         frac = get_rand_percentage()
         ops_choices.append({'op': 'sample', 'args': {'frac': frac}})
-    #
+
+    if len(schema) > 2:
+        num_drop = np.random.randint(1, len(schema)-1, 1)
+        ops_choices.append({ 'op': 'project',
+                             'args': {
+                                'output_cols': np.random.choice(list(schema.keys()), num_drop, replace=False).tolist()
+                             }
+        })
     #         # # point edits
     #         # col = select_rand_cols(df_columns, 1)[0]
     #         # colvalues = set(df_dict[df_name][col].values)
@@ -212,10 +219,11 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
     wf.generate_base_artifact(num_cols=base_shape[0], num_rows=base_shape[1])
 
     num_generated = len(wf.artifact_list)
+    artifact_exclusions = []
 
     while num_generated < num_versions:
         try:
-            source_artifact = wf.select_random_artifact(bfactor=bfactor)
+            source_artifact = wf.select_random_artifact(bfactor=bfactor, exclude=artifact_exclusions)
             if not source_artifact.schema_map:
                 continue
             ops_choices = generate_ops_choices(schema=source_artifact.schema_map,
@@ -234,7 +242,12 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                 #    logger.warning('Could not apply_op, retrying...')
             else:
                 logger.warning(f"No ops choices available for {source_artifact.label}")
-                break
+                artifact_exclusions.append(source_artifact.label)
+                if set(artifact_exclusions) == set(wf.artifact_list):
+                    logger.error(f"Do not have any options remaining for any of the artifacts.")
+                    break
+                else:
+                    continue
 
             num_generated = len(wf.artifact_list)
         except NotImplementedError as e:

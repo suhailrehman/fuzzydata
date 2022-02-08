@@ -194,12 +194,13 @@ class Workflow(ABC):
 
         self.perf_df.to_csv(filename)
 
-    def select_random_artifact(self, bfactor=1.0) -> Artifact:
-        size = len(self.artifact_list)
+    def select_random_artifact(self, bfactor=1.0, exclude: List[str] = None) -> Artifact:
+        viable_artifacts = dict(filter(lambda x: x[0] not in exclude, self.artifact_dict.items()))
+        size = len(viable_artifacts)
         i = np.arange(size)  # an array of the index value for weighting
         prob = np.exp(i/bfactor)  # higher weights for larger index values
         prob /= prob.sum()
-        return self.artifact_dict[np.random.choice(list(self.artifact_dict.keys()), 1)[0]]
+        return self.artifact_dict[np.random.choice(list(viable_artifacts.keys()), 1)[0]]
 
     def __len__(self):
         return len(self.artifact_list)
