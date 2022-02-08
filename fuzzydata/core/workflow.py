@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List
 
 import networkx as nx
+import numpy as np
 import pandas as pd
 
 from fuzzydata.core.artifact import Artifact
@@ -116,6 +117,8 @@ class Workflow(ABC):
         new_artifact = operation.execute()
         self.add_artifact(new_artifact, from_artifacts=artifacts, operation=operation)
 
+        # TODO: Exception Handling and return value on op failure / empty df
+
         # Add operation to op list
         self.operation_list.append(operation.to_dict())
 
@@ -126,14 +129,17 @@ class Workflow(ABC):
             'op': op,
             'args': args,
             'start_time': operation.start_time,
-            'end_time' : operation.end_time,
+            'end_time': operation.end_time,
             'elapsed_time': operation.get_execution_time()
         }, ignore_index=True).reset_index(drop=True)
 
-    def serialize_workflow(self, output_dir: str) -> None:
+    def serialize_workflow(self, output_dir: str = None) -> None:
+        if not output_dir:
+            output_dir = self.out_dir
+
         # Create Output Directories
         artifact_dir = f"{output_dir}/artifacts/"
-        os.makedirs(artifact_dir)
+        os.makedirs(artifact_dir, exist_ok=True)
 
         # Write out all artifacts
         for label, artifact in self.artifact_dict.items():
@@ -187,6 +193,13 @@ class Workflow(ABC):
             filename = f"{self.out_dir}/{self.name}_perf.csv"
 
         self.perf_df.to_csv(filename)
+
+    def select_random_artifact(self, bfactor=1.0) -> Artifact:
+        size = len(self.artifact_list)
+        i = np.arange(size)  # an array of the index value for weighting
+        prob = np.exp(i/bfactor)  # higher weights for larger index values
+        prob /= prob.sum()
+        return self.artifact_dict[np.random.choice(list(self.artifact_dict.keys()), 1)[0]]
 
     def __len__(self):
         return len(self.artifact_list)

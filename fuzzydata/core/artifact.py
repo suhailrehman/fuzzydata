@@ -19,7 +19,7 @@ class Artifact(ABC):
             self.table = from_df
             self.in_memory = True
 
-        logger.info(f'New Artifact: {label}')
+        logger.debug(f'New Artifact: {label}')
 
     @abstractmethod
     def generate(self, num_rows, schema):
@@ -44,6 +44,9 @@ class Artifact(ABC):
     @abstractmethod
     def to_df(self) -> pd.DataFrame:
         pass
+
+    def num_rows(self):
+        return len(self.to_df().index)
 
     def __repr__(self):
         return f"Artifact(label={self.label})"
