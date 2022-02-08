@@ -1,3 +1,4 @@
+import logging
 import pytest
 import sqlalchemy
 import modin.pandas
@@ -7,6 +8,8 @@ from fuzzydata.clients.sqlite import SQLArtifact, SQLWorkflow
 from fuzzydata.clients.pandas import DataFrameArtifact, DataFrameWorkflow
 from fuzzydata.core.generator import generate_schema
 
+logger = logging.getLogger(__name__)
+
 _static_schema_test = {'EafKN__rgb_color': 'rgb_color',
                        'RFD4U__uuid4': 'uuid4',
                        'M8OoL__postcode': 'postcode',
@@ -14,7 +17,6 @@ _static_schema_test = {'EafKN__rgb_color': 'rgb_color',
                        'qL81j__domain_name': 'domain_name',
                        'a0UaD__zipcode_in_state': 'zipcode_in_state',
                        'dHchx__suffix_female': 'suffix_female',
-                       '8b5GZ__uri_page': 'uri_page',
                        'Vg4hn__name_male': 'name_male',
                        'dwdle__zipcode_plus4': 'zipcode_plus4',
                        'Vyl6E__text': 'text',
@@ -32,19 +34,20 @@ workflow_fixtures = ['df_workflow', 'sql_workflow', 'modin_workflow']
 
 @pytest.fixture(scope="session")
 def dataframe_artifact(tmpdir_factory):
-    tmp_dir = tmpdir_factory.mktemp("fuzzydata_test")
+    tmp_dir = tmpdir_factory.mktemp("fuzzydata_df_test")
     return DataFrameArtifact('test_df', filename=tmp_dir.join('test_df.csv'))
 
 
 @pytest.fixture(scope="session")
 def modin_artifact(tmpdir_factory):
-    tmp_dir = tmpdir_factory.mktemp("fuzzydata_test")
+    tmp_dir = tmpdir_factory.mktemp("fuzzydata_modin_test")
     return ModinArtifact('test_df', filename=tmp_dir.join('test_df.csv'))
 
 
 @pytest.fixture(scope="session")
 def sql_artifact(tmpdir_factory):
-    tmp_dir = tmpdir_factory.mktemp("fuzzydata_test")
+    tmp_dir = tmpdir_factory.mktemp("fuzzydata_sql_test")
+    logger.info(f'Test Directory: {tmp_dir}')
     sql_engine = sqlalchemy.create_engine(f"sqlite:///{tmp_dir}/fuzzydata_test.db")
     return SQLArtifact('test_df', filename=tmp_dir.join('test_df.csv'), sql_engine=sql_engine)
 

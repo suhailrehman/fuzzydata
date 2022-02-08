@@ -85,7 +85,7 @@ class SQLOperation(Operation['SQLArtifact']):
         super(SQLOperation, self).sample(frac)
         num_rows = len(self.sources[0])
         sample_rows = math.ceil(num_rows*frac)
-        sql_sample_stmt = f"CREATE TABLE {self.new_label} AS SELECT * FROM {self.sources[0].label} ORDER BY RANDOM() " \
+        sql_sample_stmt = f"CREATE TABLE `{self.new_label}` AS SELECT * FROM `{self.sources[0].label}` ORDER BY RANDOM() " \
                           f"LIMIT {sample_rows} "
         return SQLArtifact(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
@@ -94,11 +94,11 @@ class SQLOperation(Operation['SQLArtifact']):
 
     def groupby(self, group_columns: List[str], agg_columns: List[str], agg_function: str) -> SQLArtifact:
         super(SQLOperation, self).groupby(group_columns, agg_columns, agg_function)
-        group_cols_str = ','.join(group_columns)
-        agg_cols_str = f"{agg_function}({','.join(agg_columns)})"
+        group_cols_str = ', '.join([f"`{x}`" for x in group_columns])
+        agg_cols_str = f"{agg_function}({','.join([f'`{x}`' for x in agg_columns])})"
         sql_groupby_stmt = f"CREATE TABLE {self.new_label} AS SELECT {group_cols_str}, {agg_cols_str} " \
                            f"FROM {self.sources[0].label} " \
-                           f"GROUP BY {','.join(group_columns)} "
+                           f"GROUP BY {group_cols_str} "
         return SQLArtifact(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
                            from_sql=sql_groupby_stmt,
@@ -107,9 +107,9 @@ class SQLOperation(Operation['SQLArtifact']):
     def project(self, output_cols: List[str]) -> T:
         super(SQLOperation, self).project(output_cols)
 
-        project_predicate = ','.join(output_cols)
+        project_predicate = ','.join([f"`{x}`" for x in output_cols])
 
-        sql_project_stmt = f"CREATE TABLE {self.new_label} AS SELECT {project_predicate} FROM {self.sources[0].label} "
+        sql_project_stmt = f"CREATE TABLE `{self.new_label}` AS SELECT {project_predicate} FROM `{self.sources[0].label}` "
         return SQLArtifact(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
                            from_sql=sql_project_stmt,
@@ -117,7 +117,7 @@ class SQLOperation(Operation['SQLArtifact']):
 
     def select(self, condition: str) -> T:
         super(SQLOperation, self).select(condition)
-        sql_select_stmt = f"CREATE TABLE {self.new_label} AS SELECT * FROM {self.sources[0].label} " \
+        sql_select_stmt = f"CREATE TABLE `{self.new_label}` AS SELECT * FROM `{self.sources[0].label}` " \
                           f"WHERE {condition}"
         return SQLArtifact(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,

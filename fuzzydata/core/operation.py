@@ -1,3 +1,4 @@
+import logging
 import time
 from abc import ABC, abstractmethod
 from typing import List, TypeVar, Generic, Dict
@@ -5,6 +6,8 @@ from typing import List, TypeVar, Generic, Dict
 from fuzzydata.core.artifact import Artifact
 
 T = TypeVar('T')
+
+logger = logging.getLogger(__name__)
 
 
 class Operation(Generic[T], ABC):
@@ -52,9 +55,11 @@ class Operation(Generic[T], ABC):
         pass
 
     def execute(self) -> None:
+        logger.debug(f"Before Op: {self.sources[0].to_df().columns}")
         self.start_time = time.perf_counter()
         result = self.op(**self.args)
         self.end_time = time.perf_counter()
+        logger.debug(f"After Op: {result.to_df()}")
         return result
 
     def get_execution_time(self):
