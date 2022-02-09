@@ -25,14 +25,19 @@ class DataFrameArtifact(Artifact):
         }
 
         self.operation_class = DataFrameOperation
+        self.table = None
+        self.in_memory = False
 
         if from_df is not None:
-            self.table = self.pd.DataFrame(from_df)
-            self.in_memory = True
+            self.from_df(from_df)
 
     def generate(self, num_rows, schema):
         self.table = generate_table(num_rows, column_dict=schema, pd=self.pd)
         self.schema_map = schema
+        self.in_memory = True
+
+    def from_df(self, df):
+        self.table = self.pd.DataFrame(df)
         self.in_memory = True
 
     def deserialize(self, filename=None):
@@ -116,5 +121,5 @@ class DataFrameWorkflow(Workflow):
         self.artifact_class = DataFrameArtifact
         self.operator_class = DataFrameOperation
 
-    def initialize_new_artifact(self, label=None, filename=None):
-        return DataFrameArtifact(label, filename=filename)
+    def initialize_new_artifact(self, label=None, filename=None, schema_map=None):
+        return DataFrameArtifact(label, filename=filename, schema_map=schema_map)

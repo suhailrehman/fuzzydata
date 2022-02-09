@@ -40,7 +40,7 @@ class SQLArtifact(Artifact):
                 self.table = self.pd.read_sql(self._get_table, con=self.sql_engine)
 
         elif from_df is not None:
-            from_df.to_sql(self.label, con=self.sql_engine, if_exists='replace', index=False)
+            self.from_df(from_df)
 
     def generate(self, num_rows, schema):
         df = generate_table(num_rows, column_dict=schema)
@@ -49,6 +49,11 @@ class SQLArtifact(Artifact):
         if self.sync_df:
             self.table = df
         # self.in_memory = True
+
+    def from_df(self, df):
+        df.to_sql(self.label, con=self.sql_engine, if_exists='replace', index=False)
+        if self.sync_df:
+            self.table = df
 
     def deserialize(self, filename=None):
         if not filename:
@@ -143,7 +148,7 @@ class SQLOperation(Operation['SQLArtifact']):
         super(SQLOperation, self).merge(key_col)
         sql_select_stmt = f"CREATE TABLE {self.new_label} AS SELECT * FROM {self.sources[0].label} " \
                           f"INNER JOIN {self.sources[1].label} " \
-                          f"USING ({key_col})"
+                          f"USING (`{key_col}`)"
         return self.artifact_class(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
                            from_sql=sql_select_stmt,
@@ -160,5 +165,5 @@ class SQLWorkflow(Workflow):
         self.operator_class = SQLOperation
         self.sql_engine = sqlalchemy.create_engine(f"sqlite:///{self.out_dir}/{self.name}.db")
 
-    def initialize_new_artifact(self, label=None, filename=None):
-        return SQLArtifact(label, filename=filename, sql_engine=self.sql_engine)
+    def initialize_new_artifact(self, label=None, filename=None, schema_map=None):
+        return SQLArtifact(label, filename=filename, sql_engine=self.sql_engine, schema_map=schema_map)

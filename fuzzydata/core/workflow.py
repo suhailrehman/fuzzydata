@@ -53,7 +53,7 @@ class Workflow(ABC):
         return f"artifact_{len(self)}"
 
     @abstractmethod
-    def initialize_new_artifact(self, label=None, filename=None) -> Artifact:
+    def initialize_new_artifact(self, label=None, filename=None, schema_map=None) -> Artifact:
         pass
 
     def add_artifact(self, artifact: Artifact,
@@ -96,7 +96,8 @@ class Workflow(ABC):
             column_maps = generate_schema(num_cols)
         if not label:
             label = self.generate_next_label()
-        new_artifact = self.initialize_new_artifact(label=label, filename=f"{self.artifact_dir}/{label}.csv")
+        new_artifact = self.initialize_new_artifact(label=label, filename=f"{self.artifact_dir}/{label}.csv",
+                                                    schema_map=column_maps)
         new_artifact.generate(num_rows, column_maps)
         self.add_artifact(new_artifact)
 
@@ -182,6 +183,7 @@ class Workflow(ABC):
         for op in op_list:
             for source in op['sources']:
                 if source not in self.artifact_dir:
+                    # TODO: Serialize Schema Maps as well
                     source_artifact = self.initialize_new_artifact(label=source)
                     source_artifact.deserialize(filename=f"{artifact_dir}/{source}.{source_artifact.file_format}")
                     self.add_artifact(source_artifact)

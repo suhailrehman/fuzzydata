@@ -23,6 +23,10 @@ class Artifact(ABC):
         pass
 
     @abstractmethod
+    def from_df(self, df):
+        pass
+
+    @abstractmethod
     def deserialize(self, filename):
         pass
 

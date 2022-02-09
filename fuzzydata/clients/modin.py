@@ -25,5 +25,5 @@ class ModinWorkflow(Workflow):
         self.artifact_class = ModinArtifact
         self.operator_class = DataFrameOperation
 
-    def initialize_new_artifact(self, label=None, filename=None):
-        return ModinArtifact(label, filename=filename)
+    def initialize_new_artifact(self, label=None, filename=None, schema_map=None):
+        return ModinArtifact(label, filename=filename, schema_map=schema_map)

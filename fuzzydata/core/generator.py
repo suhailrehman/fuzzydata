@@ -52,19 +52,22 @@ def generate_prefix(symbol_dict: str, size: int=5) -> str:
 
 def generate_table(num_rows: int=100, column_dict: Dict=None, pd=pandas, key_series=None) -> pandas.DataFrame:
     faker = Faker()
-    logger.info(f'Generating base df with {num_rows} rows and {len(column_dict.keys())} columns')
-    logger.debug(f'Column list: {column_dict.keys()}')
+
     series_list = []
     label_list = []
 
     if key_series is not None:
         series_list.append(key_series)
         label_list.append(key_series.name)
+        logger.info(f'Generating right-merge df df with {num_rows} rows and {len(column_dict.keys())} columns')
+    else:
+        logger.info(f'Generating base df with {num_rows} rows and {len(column_dict.keys())} columns')
 
     for label, column in column_dict.items():
         series_list.append(pd.Series((faker.format(column) for _ in range(num_rows))))
         label_list.append(label)
 
+    logger.debug(f'Column list: {label_list}')
     return pd.concat(series_list, axis=1, keys=label_list)
 
 
@@ -123,12 +126,12 @@ def get_rand_percentage(minimum=0.1, maximum=0.99):
     return round((maximum - minimum) * np.random.random_sample() + minimum,  2)
 
 
-def generate_pkfk_join_complimentary_table(source_table, source_schema: Dict['str', 'str'],
-                                           key_col: str, new_col_size=None, pd=pandas):
+def generate_pkfk_join_table(source_table, source_schema: Dict['str', 'str'],
+                             key_col: str, new_col_size=None, pd=pandas):
     key_values = list(set(source_table[key_col].values))
     key_series = pd.Series(data=key_values, name=key_col)
     if not new_col_size:
-        new_col_size = np.random.randint(2, max(2, len(source_table.columns)+1))
+        new_col_size = np.random.randint(2, max(3, len(source_table.columns)+1))
 
     new_schema = generate_schema(new_col_size)
     new_df = generate_table(num_rows=len(key_series.index), column_dict=new_schema, pd=pd, key_series=key_series)
@@ -196,7 +199,7 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int) -> Dict[str, Dic
 
     if 'joinable' in df_col_types:
         on = select_rand_cols(df_col_types, 1, 'joinable')[0]
-        ops_choices.append(('merge', {'on': on}))
+        ops_choices.append({'op': 'merge', 'args': {'key_col': on}})
 
     # if 'string' i df_col_types:
     #     #     col = select_rand_cols(df_columns, 1, 'string')[0]
@@ -253,19 +256,27 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
             if ops_choices:
                 logger.debug(f'Ops Choices: {ops_choices}')
                 selected_op = np.random.choice(ops_choices, 1)[0]
+                source_artifacts = [source_artifact]
                 # TODO: Handle Merge Op here
                 if selected_op['op'] == 'merge':
-                    pass
-                    '''
-                    generate_pkfk_join_complimentary_table(source_table=source_artifact.to_df(),
-                                                           source_schema=source_artifact.schema_map,
-                                                           key_col=selected_op['args']['key_col'],
-                                                           )
-                    '''
-                else:
-                    logger.info(f"Executing Operation: {source_artifact.label} "
-                                f"=={selected_op['op']}==> artifact_{num_generated}")
-                    wf.generate_artifact_from_operation([source_artifact], **selected_op)
+                    if num_generated == num_versions - 1:
+                        # TODO: Maintain operation exclusion list like artifacts on bad op
+                        logger.warning('Attempting to do merge as last operation; doing another op')
+                        continue
+                    right_df, right_schema = generate_pkfk_join_table(source_table=source_artifact.to_df(),
+                                                                      source_schema=source_artifact.schema_map,
+                                                                      key_col=selected_op['args']['key_col'])
+                    right_df_label = wf.generate_next_label()
+                    right_artifact = wf.initialize_new_artifact(label=right_df_label,
+                                                                filename=f"{wf.artifact_dir}/{right_df_label}.csv",
+                                                                schema_map=right_schema)
+                    right_artifact.from_df(right_df)
+                    wf.add_artifact(right_artifact)
+                    source_artifacts.append(right_artifact)
+
+                logger.info(f"Executing Operation: {tuple(a.label for a in source_artifacts)} "
+                            f"=={selected_op['op']}==> artifact_{num_generated}")
+                wf.generate_artifact_from_operation(source_artifacts, **selected_op)
 
                 # TODO: Exception Handling for empty datagframes generated
                 # if not next_df:

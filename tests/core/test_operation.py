@@ -5,7 +5,7 @@ import os
 import pytest
 import numpy as np
 
-from fuzzydata.core.generator import generate_pkfk_join_complimentary_table
+from fuzzydata.core.generator import generate_pkfk_join_table
 from tests.conftest import static_artifact_fixtures, generated_artifact_fixtures
 
 logger = logging.getLogger(__name__)
@@ -77,9 +77,9 @@ def test_operations(artifact, request, op_dict):
 @pytest.mark.parametrize('source_artifact', static_artifact_fixtures)
 def test_merge_op(source_artifact, request):
     concrete_artifact = request.getfixturevalue(source_artifact)
-    new_df, new_schema = generate_pkfk_join_complimentary_table(source_table=concrete_artifact.to_df(),
-                                                                source_schema=concrete_artifact.schema_map,
-                                                                key_col=_merge_operation['args']['key_col'])
+    new_df, new_schema = generate_pkfk_join_table(source_table=concrete_artifact.to_df(),
+                                                  source_schema=concrete_artifact.schema_map,
+                                                  key_col=_merge_operation['args']['key_col'])
     extra_args = {}
     if hasattr(concrete_artifact,'sql_engine'):
         extra_args['sql_engine'] = concrete_artifact.sql_engine
