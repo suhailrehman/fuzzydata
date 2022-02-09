@@ -2,11 +2,12 @@ import time
 import sys
 import argparse
 import logging
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fuzzydata.clients import supported_workflows
 from fuzzydata.core.generator import generate_workflow
-
-logger = logging.getLogger(__name__)
 
 _LOG_LEVELS = {
     'critical': logging.CRITICAL,
@@ -16,6 +17,8 @@ _LOG_LEVELS = {
     'info': logging.INFO,
     'debug': logging.DEBUG
 }
+
+_LOG_FORMAT = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
 
 
 def setup_arguments(args):
@@ -72,12 +75,13 @@ def main(args):
     options = setup_arguments(args)
 
     # Set log level first
-    logger.setLevel(_LOG_LEVELS[options.log.lower()])
+    logging.basicConfig(level=_LOG_LEVELS[options.log.lower()], format=_LOG_FORMAT)
+    logger = logging.getLogger(__name__)
 
-    logger.info(f"Generator Config: {options}")
+    logger.info(f"FuzzyData Config: {options}")
 
-    workflow = generate_workflow(workflow_class=supported_workflows[options.wf_type],
-                                 name=options.name, num_versions=options.versions,
+    workflow = generate_workflow(workflow_class=supported_workflows[options.wf_client],
+                                 name=options.wf_name, num_versions=options.versions,
                                  base_shape=(options.columns, options.rows),
                                  out_directory=options.output_dir, bfactor=options.bfactor)
     # matfreq=options.matfreq)

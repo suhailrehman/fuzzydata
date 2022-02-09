@@ -1,4 +1,4 @@
-import modin
+import modin.pandas as mpd
 
 from fuzzydata.clients.pandas import DataFrameArtifact, DataFrameOperation
 from fuzzydata.core.workflow import Workflow
@@ -7,7 +7,7 @@ from fuzzydata.core.workflow import Workflow
 class ModinArtifact(DataFrameArtifact):
 
     def __init__(self, *args, **kwargs):
-        kwargs.update({'pd': modin.pandas})
+        kwargs.update({'pd': mpd})
         super(ModinArtifact, self).__init__(*args, **kwargs)
         self._deserialization_function = {
             'csv': self.pd.read_csv
