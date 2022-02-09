@@ -15,6 +15,7 @@ class DataFrameArtifact(Artifact):
 
     def __init__(self, *args, **kwargs):
         self.pd = kwargs.pop("pd", pandas)
+        from_df = kwargs.pop("from_df", None)
         super(DataFrameArtifact, self).__init__(*args, **kwargs)
         self._deserialization_function = {
             'csv': self.pd.read_csv
@@ -24,6 +25,10 @@ class DataFrameArtifact(Artifact):
         }
 
         self.operation_class = DataFrameOperation
+
+        if from_df is not None:
+            self.table = self.pd.DataFrame(from_df)
+            self.in_memory = True
 
     def generate(self, num_rows, schema):
         self.table = generate_table(num_rows, column_dict=schema, pd=self.pd)
@@ -58,11 +63,12 @@ class DataFrameArtifact(Artifact):
 
 class DataFrameOperation(Operation['DataFrameArtifact']):
     def __init__(self, *args, **kwargs):
+        self.artifact_class = kwargs.pop('artifact_class', DataFrameArtifact)
         super(DataFrameOperation, self).__init__(*args, **kwargs)
 
     def sample(self, frac: float) -> DataFrameArtifact:
         super(DataFrameOperation, self).sample(frac)
-        return DataFrameArtifact(label=self.new_label,
+        return self.artifact_class(label=self.new_label,
                                  from_df=self.sources[0].table.sample(frac=frac),
                                  schema_map=self.dest_schema_map)
 
@@ -72,26 +78,26 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
         project_df = self.sources[0].table[group_columns + agg_columns]
         groupby_instance = getattr(project_df.groupby(group_columns),agg_function)
         new_df = groupby_instance().reset_index(drop=False)
-        return DataFrameArtifact(label=self.new_label,
+        return self.artifact_class(label=self.new_label,
                                  from_df=new_df,
                                  schema_map=self.dest_schema_map)
 
     def project(self, output_cols: List[str]) -> T:
         super(DataFrameOperation, self).project(output_cols)
-        return DataFrameArtifact(label=self.new_label,
+        return self.artifact_class(label=self.new_label,
                                  from_df=self.sources[0].table[output_cols].copy(),
                                  schema_map=self.dest_schema_map)
 
     def select(self, condition: str) -> T:
         super(DataFrameOperation, self).select(condition)
-        return DataFrameArtifact(label=self.new_label,
+        return self.artifact_class(label=self.new_label,
                                  from_df=self.sources[0].table.query(condition),
                                  schema_map=self.dest_schema_map)
 
     def merge(self, key_col: List[str]) -> T:
         super(DataFrameOperation, self).merge(key_col)
         merge_result = self.sources[0].table.merge(self.sources[1].table, on=key_col)
-        return DataFrameArtifact(label=self.new_label,
+        return self.artifact_class(label=self.new_label,
                                  from_df=merge_result,
                                  schema_map=self.dest_schema_map)
 
@@ -99,7 +105,7 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
         super(DataFrameOperation, self).pivot(index_cols, columns, value_col, agg_func)
         pivot_result = self.sources[0].table.pivot_table(index=index_cols, columns=columns,
                                                          values=value_col, aggfunc=agg_func)
-        return DataFrameArtifact(label=self.new_label,
+        return self.artifact_class(label=self.new_label,
                                  from_df=pivot_result,
                                  schema_map=self.dest_schema_map)
 

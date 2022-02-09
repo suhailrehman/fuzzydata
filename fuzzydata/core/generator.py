@@ -9,6 +9,8 @@ import logging
 
 from functools import partial
 from typing import Callable, Dict
+
+import pandas as pd
 from faker import Faker
 from itertools import chain
 
@@ -48,15 +50,21 @@ def generate_prefix(symbol_dict: str, size: int=5) -> str:
     return ''.join(np.random.choice(list(symbol_dict), size))
 
 
-def generate_table(num_rows: int=100, column_dict: Dict=None, pd=pandas) -> pandas.DataFrame:
+def generate_table(num_rows: int=100, column_dict: Dict=None, pd=pandas, key_series=None) -> pandas.DataFrame:
     faker = Faker()
     logger.info(f'Generating base df with {num_rows} rows and {len(column_dict.keys())} columns')
     logger.debug(f'Column list: {column_dict.keys()}')
     series_list = []
     label_list = []
+
+    if key_series is not None:
+        series_list.append(key_series)
+        label_list.append(key_series.name)
+
     for label, column in column_dict.items():
         series_list.append(pd.Series((faker.format(column) for _ in range(num_rows))))
         label_list.append(label)
+
     return pd.concat(series_list, axis=1, keys=label_list)
 
 
@@ -113,6 +121,20 @@ def select_rand_aggregate():
 
 def get_rand_percentage(minimum=0.1, maximum=0.99):
     return round((maximum - minimum) * np.random.random_sample() + minimum,  2)
+
+
+def generate_pkfk_join_complimentary_table(source_table, source_schema: Dict['str', 'str'],
+                                           key_col: str, new_col_size=None, pd=pandas):
+    key_values = list(set(source_table[key_col].values))
+    key_series = pd.Series(data=key_values, name=key_col)
+    if not new_col_size:
+        new_col_size = np.random.randint(2, max(2, len(source_table.columns)+1))
+
+    new_schema = generate_schema(new_col_size)
+    new_df = generate_table(num_rows=len(key_series.index), column_dict=new_schema, pd=pd, key_series=key_series)
+    new_schema[key_col] = source_schema[key_col]
+
+    return new_df, new_schema
 
 
 def generate_ops_choices(schema: Dict[str, str], num_rows: int) -> Dict[str, Dict]:
@@ -174,8 +196,7 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int) -> Dict[str, Dic
 
     if 'joinable' in df_col_types:
         on = select_rand_cols(df_col_types, 1, 'joinable')[0]
-        # TODO: Do not allow joins yet
-        # ops_choices.append(('merge', {'on': on}))
+        ops_choices.append(('merge', {'on': on}))
 
     # if 'string' i df_col_types:
     #     #     col = select_rand_cols(df_columns, 1, 'string')[0]
@@ -233,9 +254,18 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                 logger.debug(f'Ops Choices: {ops_choices}')
                 selected_op = np.random.choice(ops_choices, 1)[0]
                 # TODO: Handle Merge Op here
-                logger.info(f"Executing Operation: {source_artifact.label} "
-                            f"=={selected_op['op']}==> artifact_{num_generated}")
-                wf.generate_artifact_from_operation([source_artifact], **selected_op)
+                if selected_op['op'] == 'merge':
+                    pass
+                    '''
+                    generate_pkfk_join_complimentary_table(source_table=source_artifact.to_df(),
+                                                           source_schema=source_artifact.schema_map,
+                                                           key_col=selected_op['args']['key_col'],
+                                                           )
+                    '''
+                else:
+                    logger.info(f"Executing Operation: {source_artifact.label} "
+                                f"=={selected_op['op']}==> artifact_{num_generated}")
+                    wf.generate_artifact_from_operation([source_artifact], **selected_op)
 
                 # TODO: Exception Handling for empty datagframes generated
                 # if not next_df:

@@ -16,6 +16,7 @@ class SQLArtifact(Artifact):
         self.sql_engine = kwargs.pop("sql_engine")
         self.from_sql = kwargs.pop("from_sql", None)
         self.sync_df = kwargs.pop("sync_df", False)
+        from_df = kwargs.pop("from_df", None)
 
         super(SQLArtifact, self).__init__(*args, **kwargs)
 
@@ -37,6 +38,9 @@ class SQLArtifact(Artifact):
             self.sql_engine.execute(self.from_sql)
             if self.sync_df:
                 self.table = self.pd.read_sql(self._get_table, con=self.sql_engine)
+
+        elif from_df is not None:
+            from_df.to_sql(self.label, con=self.sql_engine, if_exists='replace', index=False)
 
     def generate(self, num_rows, schema):
         df = generate_table(num_rows, column_dict=schema)
@@ -79,6 +83,7 @@ class SQLArtifact(Artifact):
 class SQLOperation(Operation['SQLArtifact']):
 
     def __init__(self, *args, **kwargs):
+        self.artifact_class = kwargs.pop('artifact_class', SQLArtifact)
         super(SQLOperation, self).__init__(*args, **kwargs)
         self.agg_function_dict = {
             'mean': 'AVG'
@@ -91,7 +96,7 @@ class SQLOperation(Operation['SQLArtifact']):
         sql_sample_stmt = f"CREATE TABLE `{self.new_label}` AS " \
                           f"SELECT * FROM `{self.sources[0].label}` ORDER BY RANDOM() " \
                           f"LIMIT {sample_rows} "
-        return SQLArtifact(label=self.new_label,
+        return self.artifact_class(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
                            from_sql=sql_sample_stmt,
                            schema_map=self.dest_schema_map)
@@ -108,7 +113,7 @@ class SQLOperation(Operation['SQLArtifact']):
         sql_groupby_stmt = f"CREATE TABLE {self.new_label} AS SELECT {group_cols_str}, {agg_cols_str} " \
                            f"FROM {self.sources[0].label} " \
                            f"GROUP BY {group_cols_str} "
-        return SQLArtifact(label=self.new_label,
+        return self.artifact_class(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
                            from_sql=sql_groupby_stmt,
                            schema_map=self.dest_schema_map)
@@ -120,7 +125,7 @@ class SQLOperation(Operation['SQLArtifact']):
 
         sql_project_stmt = f"CREATE TABLE `{self.new_label}` AS " \
                            f"SELECT {project_predicate} FROM `{self.sources[0].label}` "
-        return SQLArtifact(label=self.new_label,
+        return self.artifact_class(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
                            from_sql=sql_project_stmt,
                            schema_map=self.dest_schema_map)
@@ -129,7 +134,7 @@ class SQLOperation(Operation['SQLArtifact']):
         super(SQLOperation, self).select(condition)
         sql_select_stmt = f"CREATE TABLE `{self.new_label}` AS SELECT * FROM `{self.sources[0].label}` " \
                           f"WHERE {condition}"
-        return SQLArtifact(label=self.new_label,
+        return self.artifact_class(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
                            from_sql=sql_select_stmt,
                            schema_map=self.dest_schema_map)
@@ -137,9 +142,9 @@ class SQLOperation(Operation['SQLArtifact']):
     def merge(self, key_col: List[str]) -> T:
         super(SQLOperation, self).merge(key_col)
         sql_select_stmt = f"CREATE TABLE {self.new_label} AS SELECT * FROM {self.sources[0].label} " \
-                          f"INNER JOIN {self.sources[0].label}" \
-                          f"WHERE {self.sources[0].label}.{key_col} = {self.sources[1].label}.{key_col}"
-        return SQLArtifact(label=self.new_label,
+                          f"INNER JOIN {self.sources[1].label} " \
+                          f"USING ({key_col})"
+        return self.artifact_class(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
                            from_sql=sql_select_stmt,
                            schema_map=self.dest_schema_map)

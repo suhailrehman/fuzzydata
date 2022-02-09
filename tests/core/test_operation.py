@@ -1,9 +1,11 @@
 import itertools
 import logging
+import os
 
 import pytest
 import numpy as np
 
+from fuzzydata.core.generator import generate_pkfk_join_complimentary_table
 from tests.conftest import static_artifact_fixtures, generated_artifact_fixtures
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,7 @@ _schema_type_mapping = {'string': ['EafKN__rgb_color',
                '9YjpC__credit_card_provider'],
  'numeric': ['zmpoV__randomize_nb_elements']}
 
-operations = [
+_operations = [
     {'op': 'sample',
      'args': {'frac': 0.5}},
     {'op': 'groupby',
@@ -46,6 +48,11 @@ operations = [
      },
 ]
 
+_merge_operation = {
+    'op': 'merge',
+    'args': {'key_col': 'a0UaD__zipcode_in_state'}
+}
+
 @pytest.mark.parametrize('artifact', generated_artifact_fixtures)
 def test_sample(artifact, request):
     concrete_artifact = request.getfixturevalue(artifact)
@@ -54,7 +61,7 @@ def test_sample(artifact, request):
     sample_op.execute()
 
 
-@pytest.mark.parametrize('artifact, op_dict', itertools.product(static_artifact_fixtures, operations))
+@pytest.mark.parametrize('artifact, op_dict', itertools.product(static_artifact_fixtures, _operations))
 def test_operations(artifact, request, op_dict):
     try:
         concrete_artifact = request.getfixturevalue(artifact)
@@ -65,3 +72,29 @@ def test_operations(artifact, request, op_dict):
         sample_op.execute()
     except NotImplementedError as e:
         logger.warning('Warning: {op} operation on {concrete_artifact.__class__} instance not implemented')
+
+
+@pytest.mark.parametrize('source_artifact', static_artifact_fixtures)
+def test_merge_op(source_artifact, request):
+    concrete_artifact = request.getfixturevalue(source_artifact)
+    new_df, new_schema = generate_pkfk_join_complimentary_table(source_table=concrete_artifact.to_df(),
+                                                                source_schema=concrete_artifact.schema_map,
+                                                                key_col=_merge_operation['args']['key_col'])
+    extra_args = {}
+    if hasattr(concrete_artifact,'sql_engine'):
+        extra_args['sql_engine'] = concrete_artifact.sql_engine
+
+    join_artifact = concrete_artifact.__class__('join_df',
+                                                filename=os.path.dirname(concrete_artifact.filename) + 'join_df.csv',
+                                                from_df=new_df, schema_map=new_schema, **extra_args)
+
+    join_op = concrete_artifact.operation_class(sources=[concrete_artifact, join_artifact],
+                                                  new_label='after_join', op=_merge_operation['op'],
+                                                  args=_merge_operation['args'],
+                                                  artifact_class=concrete_artifact.__class__)
+
+    result_artifact = join_op.execute()
+
+    expected_join_result_cols = set(concrete_artifact.to_df().columns).union(set(join_artifact.to_df().columns))
+    assert set(result_artifact.to_df().columns) == expected_join_result_cols
+

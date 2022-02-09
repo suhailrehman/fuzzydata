@@ -91,7 +91,6 @@ def modin_artifact_static(modin_artifact):
     return modin_artifact
 
 
-
 @pytest.fixture(scope='session')
 def df_workflow(tmpdir_factory):
     out_dir = tmpdir_factory.mktemp('fuzzydata_temp_wf_df')

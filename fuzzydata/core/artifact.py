@@ -15,9 +15,6 @@ class Artifact(ABC):
         self.in_memory = in_memory
         self.file_format = file_format
         self.schema_map = schema_map
-        if from_df is not None:
-            self.table = from_df
-            self.in_memory = True
 
         logger.debug(f'New Artifact: {label}')
 

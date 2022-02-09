@@ -113,7 +113,8 @@ class Workflow(ABC):
         if not new_label:
             new_label = self.generate_next_label()
 
-        operation = self.operator_class(sources=artifacts, new_label=new_label, op=op, args=args)
+        operation = self.operator_class(sources=artifacts, new_label=new_label, op=op, args=args,
+                                        artifact_class=self.artifact_class)
         new_artifact = operation.execute()
         self.add_artifact(new_artifact, from_artifacts=artifacts, operation=operation)
 
