@@ -1,8 +1,11 @@
+import shutil
 import time
 import sys
 import argparse
 import logging
 import os
+
+import json
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -66,6 +69,24 @@ def setup_arguments(args):
                         help="Set Logging Level",
                         type=str, default='info')
 
+    parser.add_argument("--replay_dir",
+                        help="Replay existing workflow in directory",
+                        type=str)
+
+    parser.add_argument("--wf_options",
+                        help="JSON-encoded workflow engine options like sql_string or modin_engine",
+                        type=str)
+
+    parser.add_argument("--exclude_ops",
+                        help='JSON-encoded list of ops to exclude e.g. ["pivot"]',
+                        type=str)
+
+    parser.add_argument("--scale_artifact",
+                        help='JSON-encoded dict of {artifact_label: new_size} to be scaled up '
+                             'e.g. {"artifact_0" : 1000000}',
+                        type=str)
+
+
     options = parser.parse_args(args)
 
     return options
@@ -80,10 +101,47 @@ def main(args):
 
     logger.info(f"FuzzyData Config: {options}")
 
-    workflow = generate_workflow(workflow_class=supported_workflows[options.wf_client],
-                                 name=options.wf_name, num_versions=options.versions,
-                                 base_shape=(options.columns, options.rows),
-                                 out_directory=options.output_dir, bfactor=options.bfactor)
+    if os.path.exists(options.output_dir+'/artifacts/'):
+        sys.stderr.write(f'\nAn existing workflow exists in directory: {options.output_dir}, Overwrite (Y/N)?:')
+        choice  = input().lower()
+        if choice in {'yes','y', 'ye', ''}:
+            shutil.rmtree(options.output_dir, )
+        else:
+            logger.info('Exiting!')
+            sys.exit(0)
+
+    wf_options = {}
+    exclude_ops = []
+
+    if options.wf_options:
+        wf_options = json.loads(options.wf_options)
+
+    if options.exclude_ops:
+        exclude_ops = json.loads(options.exclude_ops)
+
+    if options.replay_dir:
+        scale_artifact = {}
+        if options.scale_artifact:
+            scale_artifact = json.loads(options.scale_artifact)
+        logger.info(f'Replaying Previous Workflow from directory {options.replay_dir}')
+        workflow = supported_workflows[options.wf_client].load_workflow(input_dir=options.replay_dir,
+                                                                        out_directory=options.output_dir,
+                                                                        name=options.wf_name,
+                                                                        replay=True,
+                                                                        wf_options=wf_options,
+                                                                        scale_artifact=scale_artifact)
+        workflow.serialize_workflow()
+
+    else:
+        workflow = generate_workflow(workflow_class=supported_workflows[options.wf_client],
+                                     name=options.wf_name, num_versions=options.versions,
+                                     base_shape=(options.columns, options.rows),
+                                     out_directory=options.output_dir, bfactor=options.bfactor,
+                                     wf_options=wf_options,
+                                     exclude_ops=exclude_ops)
+
+        # Generate Workflow calls serialize at the end.
+
     # matfreq=options.matfreq)
 
     logger.info(f'Workflow generation completed and written to directory: {workflow.out_dir}')

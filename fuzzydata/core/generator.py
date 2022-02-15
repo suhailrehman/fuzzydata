@@ -8,7 +8,7 @@ import numpy as np
 import logging
 
 from functools import partial
-from typing import Callable, Dict
+from typing import Callable, Dict, List
 
 import pandas as pd
 from faker import Faker
@@ -140,7 +140,7 @@ def generate_pkfk_join_table(source_table, source_schema: Dict['str', 'str'],
     return new_df, new_schema
 
 
-def generate_ops_choices(schema: Dict[str, str], num_rows: int) -> Dict[str, Dict]:
+def generate_ops_choices(schema: Dict[str, str], num_rows: int, exclude: List[str]=[]) -> Dict[str, Dict]:
     """
     Generate the a number of options for the next operation to be performed on a given table with schema and num_rows
     :param schema: Column Map
@@ -233,13 +233,17 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int) -> Dict[str, Dic
     #         col = select_rand_cols(df_columns, 1)[0]
     #         ops_choices.append(('dropcol', {'col': col}))
     #
+
+    # Filter exclusion list of ops here
+    ops_choices = list(filter(lambda x: x['op'] not in exclude, ops_choices))
+
     return ops_choices
 
 
 def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10, 1000),
-                      out_directory='/tmp/dataset', bfactor=1.0):
+                      out_directory='/tmp/dataset', bfactor=1.0, wf_options={}, exclude_ops=[]):
 
-    wf = workflow_class(name=name, out_directory=out_directory)
+    wf = workflow_class(name=name, out_directory=out_directory, **wf_options)
     wf.generate_base_artifact(num_cols=base_shape[0], num_rows=base_shape[1])
 
     num_generated = len(wf.artifact_list)
@@ -251,16 +255,16 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
             if not source_artifact.schema_map:
                 continue
             ops_choices = generate_ops_choices(schema=source_artifact.schema_map,
-                                               num_rows=source_artifact.num_rows())
+                                               num_rows=source_artifact.num_rows(),
+                                               exclude=exclude_ops)
 
             if ops_choices:
                 logger.debug(f'Ops Choices: {ops_choices}')
                 selected_op = np.random.choice(ops_choices, 1)[0]
                 source_artifacts = [source_artifact]
-                # TODO: Handle Merge Op here
+                # Handle Merge Op here
                 if selected_op['op'] == 'merge':
                     if num_generated == num_versions - 1:
-                        # TODO: Maintain operation exclusion list like artifacts on bad op
                         logger.warning('Attempting to do merge as last operation; doing another op')
                         continue
                     right_df, right_schema = generate_pkfk_join_table(source_table=source_artifact.to_df(),

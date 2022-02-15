@@ -35,7 +35,7 @@ def test_generate_workflow(wf_class, num_versions, base_shape, tmpdir_factory):
     try:
         output_path = tmpdir_factory.mktemp(f'test_{wf_class.__name__}')
         workflow = generate_workflow(wf_class, name=f'test_{wf_class.__name__}', num_versions=num_versions,
-                                 base_shape=base_shape, out_directory=output_path)
+                                     base_shape=base_shape, out_directory=output_path)
 
         assert len(workflow) == num_versions
         assert os.path.exists(f"{output_path}/artifacts/")

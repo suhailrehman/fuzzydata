@@ -30,9 +30,9 @@ class SQLArtifact(Artifact):
             'csv': 'to_csv'
         }
 
-        self._get_table = f'SELECT * FROM {self.label}'
-        self._del_table = f'DROP TABLE IF EXISTS {self.label}'
-        self._num_rows = f'SELECT COUNT(*) FROM {self.label}'
+        self._get_table = f'SELECT * FROM `{self.label}`'
+        self._del_table = f'DROP TABLE IF EXISTS `{self.label}`'
+        self._num_rows = f'SELECT COUNT(*) FROM `{self.label}`'
 
         if self.from_sql:
             self.sql_engine.execute(self.from_sql)
@@ -115,8 +115,8 @@ class SQLOperation(Operation['SQLArtifact']):
             agg_function = self.agg_function_dict[agg_function]
 
         agg_cols_str = f"{','.join([f'{agg_function}(`{x}`) AS `{x}`' for x in agg_columns])}"
-        sql_groupby_stmt = f"CREATE TABLE {self.new_label} AS SELECT {group_cols_str}, {agg_cols_str} " \
-                           f"FROM {self.sources[0].label} " \
+        sql_groupby_stmt = f"CREATE TABLE `{self.new_label}` AS SELECT {group_cols_str}, {agg_cols_str} " \
+                           f"FROM `{self.sources[0].label}` " \
                            f"GROUP BY {group_cols_str} "
         return self.artifact_class(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
@@ -146,8 +146,8 @@ class SQLOperation(Operation['SQLArtifact']):
 
     def merge(self, key_col: List[str]) -> T:
         super(SQLOperation, self).merge(key_col)
-        sql_select_stmt = f"CREATE TABLE {self.new_label} AS SELECT * FROM {self.sources[0].label} " \
-                          f"INNER JOIN {self.sources[1].label} " \
+        sql_select_stmt = f"CREATE TABLE `{self.new_label}` AS SELECT * FROM `{self.sources[0].label}` " \
+                          f"INNER JOIN `{self.sources[1].label}` " \
                           f"USING (`{key_col}`)"
         return self.artifact_class(label=self.new_label,
                            sql_engine=self.sources[0].sql_engine,
@@ -160,10 +160,13 @@ class SQLOperation(Operation['SQLArtifact']):
 
 class SQLWorkflow(Workflow):
     def __init__(self, *args, **kwargs):
+        sql_string = kwargs.pop('sql_string', None)
         super(SQLWorkflow, self).__init__(*args, **kwargs)
         self.artifact_class = SQLArtifact
         self.operator_class = SQLOperation
-        self.sql_engine = sqlalchemy.create_engine(f"sqlite:///{self.out_dir}/{self.name}.db")
+        if not sql_string:
+            sql_string = f"sqlite:///{self.out_dir}/{self.name}.db"
+        self.sql_engine = sqlalchemy.create_engine(sql_string)
 
     def initialize_new_artifact(self, label=None, filename=None, schema_map=None):
         return SQLArtifact(label, filename=filename, sql_engine=self.sql_engine, schema_map=schema_map)
