@@ -1,0 +1,53 @@
+{
+  "name": "nyc-cab",
+  "operation_list": [{
+    "sources": [
+      "yellow_tripdata_2021-01"
+    ],
+    "new_label": "gb_vendor_id_amount_sum",
+    "op": "groupby",
+    "args": {
+      "group_columns": [
+        "VendorID"
+      ],
+      "agg_columns": [
+        "total_amount"
+      ],
+      "agg_function": "sum"
+    }
+  },
+    {
+      "sources": [
+        "yellow_tripdata_2021-01"
+      ],
+      "new_label": "gb_pcount_amount_mean",
+      "op": "groupby",
+      "args": {
+        "group_columns": [
+          "passenger_count"
+        ],
+        "agg_columns": [
+          "total_amount"
+        ],
+        "agg_function": "mean"
+      }
+    },
+    {
+      "sources": [
+        "yellow_tripdata_2021-01"
+      ],
+      "new_label": "gb_pcount_vendor_total_mean",
+      "op": "groupby",
+      "args": {
+        "group_columns": [
+          "passenger_count",
+          "VendorID"
+        ],
+        "agg_columns": [
+          "total_amount"
+        ],
+        "agg_function": "mean"
+      }
+    }
+  ]
+}

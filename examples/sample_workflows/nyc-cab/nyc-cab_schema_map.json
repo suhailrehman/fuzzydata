@@ -1,0 +1,22 @@
+{
+  "yellow_tripdata_2015-01": {
+    "VendorID": "int",
+    "tpep_pickup_datetime": "date",
+    "tpep_dropoff_datetime": "date",
+    "passenger_count": "int",
+    "trip_distance": "float",
+    "RatecodeID": "int",
+    "store_and_fwd_flag": "string",
+    "PULocationID": "int",
+    "DOLocationID": "int",
+    "payment_type": "int",
+    "fare_amount": "float",
+    "extra": "float",
+    "mta_tax": "float",
+    "tip_amount": "float",
+    "tolls_amount": "float",
+    "improvement_surcharge": "float",
+    "total_amount": "float",
+    "congestion_surcharge": "float"
+  }
+}

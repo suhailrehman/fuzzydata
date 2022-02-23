@@ -101,8 +101,8 @@ class Workflow(ABC):
         start_time = time.perf_counter()
         new_artifact = self.initialize_new_artifact(label=label, filename=f"{self.artifact_dir}/{label}.csv",
                                                     schema_map=column_maps)
-        end_time = time.perf_counter()
         new_artifact.generate(num_rows, column_maps)
+        end_time = time.perf_counter()
         self.add_artifact(new_artifact)
 
         self.perf_records.append(pd.Series({
