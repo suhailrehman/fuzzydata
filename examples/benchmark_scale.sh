@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-outdir='/tmp/fuzzydata_scaling_test_3/'
+outdir='/tank/local/suhail/data/fuzzydata/fuzzydata_scaling_test_3/'
 
 
 for scale in 1000 10000 100000 1000000 5000000;

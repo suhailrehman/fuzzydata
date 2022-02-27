@@ -278,9 +278,13 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                     wf.add_artifact(right_artifact)
                     source_artifacts.append(right_artifact)
 
-                logger.info(f"Executing Operation: {tuple(a.label for a in source_artifacts)} "
-                            f"=={selected_op['op']}==> artifact_{num_generated}")
-                wf.generate_artifact_from_operation(source_artifacts, **selected_op)
+                try:
+                    logger.info(f"Executing Operation: {tuple(a.label for a in source_artifacts)} "
+                                f"=={selected_op['op']}==> artifact_{num_generated}")
+                    wf.generate_artifact_from_operation(source_artifacts, **selected_op)
+                except ValueError as e : # Debugging modin-dask groupbyx2 error
+                    logger.error(f'Source_artifact {source_artifacts[0].label}, Selected Op: {selected_op}')
+                    raise e
 
                 # TODO: Exception Handling for empty datagframes generated
                 # if not next_df:

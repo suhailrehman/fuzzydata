@@ -46,6 +46,13 @@ _operations = [
               'value_col': ['zmpoV__randomize_nb_elements'],
               'agg_func': 'sum'},
      },
+    {'op': 'apply',
+     'args': {'numeric_col': 'zmpoV__randomize_nb_elements',
+              'a': 0.5, 'b': 1.0}},
+    {'op': 'fill',
+     'args': {'col_name': '9YjpC__credit_card_provider',
+              'old_value': 'Visa',
+              'new_value': 'RuPay'}}
 ]
 
 _merge_operation = {

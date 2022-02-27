@@ -130,26 +130,33 @@ class Workflow(ABC):
         if not new_label:
             new_label = self.generate_next_label()
 
-        operation = self.operator_class(sources=artifacts, new_label=new_label, op=op, args=args,
-                                        artifact_class=self.artifact_class)
-        new_artifact = operation.execute()
-        self.add_artifact(new_artifact, from_artifacts=artifacts, operation=operation)
+        try:
 
-        # TODO: Exception Handling and return value on op failure / empty df
+            operation = self.operator_class(sources=artifacts, new_label=new_label, op=op, args=args,
+                                            artifact_class=self.artifact_class)
+            new_artifact = operation.execute()
+            self.add_artifact(new_artifact, from_artifacts=artifacts, operation=operation)
 
-        # Add operation to op list
-        self.operation_list.append(operation.to_dict())
+            # TODO: Exception Handling and return value on op failure / empty df
 
-        # Add performance information
-        self.perf_records.append(pd.Series({
-            'src': tuple(x.label for x in artifacts),
-            'dst': new_label,
-            'op': op,
-            'args': args,
-            'start_time': operation.start_time,
-            'end_time': operation.end_time,
-            'elapsed_time': operation.get_execution_time()
-        }).to_frame().T)
+            # Add operation to op list
+            self.operation_list.append(operation.to_dict())
+
+            # Add performance information
+            self.perf_records.append(pd.Series({
+                'src': tuple(x.label for x in artifacts),
+                'dst': new_label,
+                'op': op,
+                'args': args,
+                'start_time': operation.start_time,
+                'end_time': operation.end_time,
+                'elapsed_time': operation.get_execution_time()
+            }).to_frame().T)
+
+        except ValueError as e:
+            logger.error(f'Could not execute Operation: {op} with args {args}')
+            self.serialize_workflow()
+            raise e
 
         return new_artifact
 
@@ -256,12 +263,15 @@ class Workflow(ABC):
         else:
             logger.warning('No Performance Data to be Written')
 
-    def select_random_artifact(self, bfactor=1.0, exclude: List[str] = None) -> Artifact:
+    def select_random_artifact(self, bfactor=0.5, exclude: List[str] = None) -> Artifact:
         viable_artifacts = dict(filter(lambda x: x[0] not in exclude, self.artifact_dict.items()))
         size = len(viable_artifacts)
-        i = np.arange(size)  # an array of the index value for weighting
-        prob = np.exp(i/bfactor)  # higher weights for larger index values
-        prob /= prob.sum()
+        a = np.arange(size)  # an array of the index value for weighting
+        prob = np.exp(a/bfactor)  # higher weights for larger index values
+
+        a = np.arange(size)
+        prob = (bfactor / (np.exp(bfactor*(size-0.5)) -1))  * np.exp(bfactor*a)
+
         return self.artifact_dict[np.random.choice(list(viable_artifacts.keys()), 1)[0]]
 
     def __len__(self):
