@@ -6,3 +6,75 @@
 ![fuzzydata](docs/logo.png)
 ---------------------------
 # The fuzzydata Workflow Generator
+
+The `fuzzydata` workflow generator enables:
+
+* Abstract specification of Dataframe-based Workflows
+* Generation of randomized tables and workflows 
+* Loading and replay of workflows on multiple clients
+
+Fuzzydata is designed to run on:
+
+* [`pandas`]()
+* [`modin[dask|ray]`]()
+* [`SQLIte`]()
+
+`fuzzydata` is designed to be extensible, you may implement your own client. 
+Please see the existing clients in [fuzzydata/clients](fuzzydata/clients/) for ways to extend the abstract `Artifact`, `Operation`
+and `Workflow` classes for your client.
+
+## Installation
+
+Manual build/install using pip:
+```bash
+python setup.py bdist_wheel
+pip install dist/fuzzydata*.whl
+```
+
+`fuzzydata` will be published on pypi soon.
+
+## Usage
+
+Some examples of fuzzydata usage are in the `examples` directory. You can also run the `fuzzydata/cli.py` command 
+to get a list of command-line options supported in fuzzydata
+
+```
+$ python fuzzydata/cli.py --help
+usage: cli.py [-h] [--wf_client WF_CLIENT] [--output_dir OUTPUT_DIR] [--wf_name WF_NAME]
+              [--columns COLUMNS] [--rows ROWS] [--versions VERSIONS] [--bfactor BFACTOR]
+              [--matfreq MATFREQ] [--npp NPP] [--log LOG] [--replay_dir REPLAY_DIR]
+              [--wf_options WF_OPTIONS] [--exclude_ops EXCLUDE_OPS] [--scale_artifact SCALE_ARTIFACT]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --wf_client WF_CLIENT
+                        Workflow Client to be used (Default pandas). Available Workflows: pandas|modin|sql
+  --output_dir OUTPUT_DIR
+                        Location of Output datasets to be stored
+  --wf_name WF_NAME     prefix for each workflow to be generated dir to be the path prefix for these files.
+  --columns COLUMNS     Number of columns in the base version
+  --rows ROWS           Number of rows in the base version
+  --versions VERSIONS   Number of artifact versions to generate
+  --bfactor BFACTOR     Workflow Branching factor, 0.1 is linear, 100 is star-like
+  --matfreq MATFREQ     Materialization frequency, i.e. how many operations before writing out an artifact
+  --log LOG             Set Logging Level
+  --replay_dir REPLAY_DIR
+                        Replay existing workflow in directory
+  --wf_options WF_OPTIONS
+                        JSON-encoded workflow engine options like sql_string or modin_engine
+  --exclude_ops EXCLUDE_OPS
+                        JSON-encoded list of ops to exclude e.g. ["pivot"]
+  --scale_artifact SCALE_ARTIFACT
+                        JSON-encoded dict of {artifact_label: new_size} to be scaled up e.g. {"artifact_0"
+                        : 1000000}
+```
+
+# License
+[MIT License](LICENSE)
+
+# Contributing to fuzzydata
+Check out the current roadmap in  [docs/roadmap.md](docs/roadmap.md). You are always welcome to develop a new client for
+fuzzydata.
+
+# Contact
+TBA
