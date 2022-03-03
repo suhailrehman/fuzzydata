@@ -7,3 +7,9 @@ supported_workflows = {
     'modin': ModinWorkflow,
     'sql': SQLWorkflow
 }
+
+
+travis_workflows = {
+    'pandas': DataFrameWorkflow,
+    'sql': SQLWorkflow
+}

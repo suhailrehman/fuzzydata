@@ -22,7 +22,7 @@ class ModinArtifact(DataFrameArtifact):
 
 class ModinWorkflow(Workflow):
     def __init__(self, *args, **kwargs):
-        self.modin_engine = kwargs.pop('modin_engine', 'ray')
+        self.modin_engine = kwargs.pop('modin_engine', 'dask')
         super(ModinWorkflow, self).__init__(*args, **kwargs)
         self.artifact_class = ModinArtifact
         self.operator_class = DataFrameOperation

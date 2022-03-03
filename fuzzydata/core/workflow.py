@@ -130,10 +130,9 @@ class Workflow(ABC):
         if not new_label:
             new_label = self.generate_next_label()
 
+        operation = self.operator_class(sources=artifacts, new_label=new_label, op=op, args=args,
+                                        artifact_class=self.artifact_class)
         try:
-
-            operation = self.operator_class(sources=artifacts, new_label=new_label, op=op, args=args,
-                                            artifact_class=self.artifact_class)
             new_artifact = operation.execute()
             self.add_artifact(new_artifact, from_artifacts=artifacts, operation=operation)
 
@@ -155,6 +154,9 @@ class Workflow(ABC):
 
         except ValueError as e:
             logger.error(f'Could not execute Operation: {op} with args {args}')
+            op_dict = operation.to_dict()
+            op_dict['status'] = 'error'
+            self.operation_list.append(op_dict)
             self.serialize_workflow()
             raise e
 

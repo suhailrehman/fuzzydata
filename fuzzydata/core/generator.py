@@ -302,6 +302,7 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
         except NotImplementedError as e:
             logger.warning(f'Attempting an operation that is not implemented for this workflow type:'
                            f" {selected_op['op']}")
+            raise e
         except Exception as e:
             logger.error('Error during generation, stopping...')
             logger.error(f'Writing out all files to {wf.out_dir}')
