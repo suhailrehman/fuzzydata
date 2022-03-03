@@ -255,7 +255,7 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
             if not source_artifact.schema_map:
                 continue
             ops_choices = generate_ops_choices(schema=source_artifact.schema_map,
-                                               num_rows=source_artifact.num_rows(),
+                                               num_rows=len(source_artifact),
                                                exclude=exclude_ops)
 
             if ops_choices:

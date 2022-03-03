@@ -20,34 +20,30 @@ class Artifact(ABC):
 
     @abstractmethod
     def generate(self, num_rows, schema):
-        pass
+        """ Abstract method which invokes generate_table function and stores it somehow  """
 
     @abstractmethod
     def from_df(self, df):
-        pass
+        """ Abstract method which accepts a dataframe as input and stores inside this artifact object"""
 
     @abstractmethod
     def deserialize(self, filename):
-        pass
+        """ Abstract method to load artifact from disk using some serialization method"""
 
     @abstractmethod
     def serialize(self, filename):
-        pass
+        """ Abstract method to store artifact to disk using some serialization method"""
 
     @abstractmethod
     def destroy(self):
-        pass
-
-    @abstractmethod
-    def __len__(self):
-        pass
+        """ Destructor when this artifact needs to deleted from memory"""
 
     @abstractmethod
     def to_df(self) -> pd.DataFrame:
-        pass
+        """ Return a dataframe representation of this artifact"""
 
-    def num_rows(self):
-        return len(self.to_df().index)
+    def __len__(self):
+        """ Abstract representation: should return the number of rows in this artifact"""
 
     def __repr__(self):
         return f"Artifact(label={self.label})"

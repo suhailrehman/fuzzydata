@@ -8,7 +8,7 @@ install:
   - pip install -r requirements.txt
 # command to run tests
 script:
-  - pytest --cov=./
+  - pytest --cov=fuzzydata tests/
 # code coverage
 after_success:
   - bash <(curl -s https://codecov.io/bash) -t fa43c2d1-12e9-4bd1-b40d-89beb6ac17cf
