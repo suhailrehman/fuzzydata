@@ -5,4 +5,3 @@ pytest
 pytest-cov
 SQLAlchemy
 modin[all]
-setuptools~=57.0.0

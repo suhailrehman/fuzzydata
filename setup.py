@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="fuzzydata",
-    version="0.0.1",
+    version="0.0.2",
     scripts=['./scripts/fuzzydata'],
     author="Suhail Rehman",
     author_email="suhailrehman@gmail.com",
@@ -23,5 +23,12 @@ setup(
     ],
     packages=find_packages(),
     python_requires=">=3.7",
-    include_package_data=True
+    include_package_data=True,
+    install_requires=[
+        'faker==13.3.0',
+        'pandas==1.4.0',
+        'networkx==2.7',
+        'SQLAlchemy==1.4.31',
+        'modin[all]==0.13.2'
+    ]
 )

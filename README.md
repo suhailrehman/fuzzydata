@@ -27,20 +27,17 @@ and `Workflow` classes for your client.
 
 Manual build/install using pip:
 ```bash
-python setup.py bdist_wheel
-pip install dist/fuzzydata*.whl
+pip install fuzzydata
 ```
-
-`fuzzydata` will be published on pypi soon.
 
 ## Usage
 
-Some examples of fuzzydata usage are in the `examples` directory. You can also run the `fuzzydata/cli.py` command 
+Some examples of fuzzydata usage are in the `examples` directory. You can also run the `fuzzydata` command 
 to get a list of command-line options supported in fuzzydata
 
 ```
-$ python fuzzydata/cli.py --help
-usage: cli.py [-h] [--wf_client WF_CLIENT] [--output_dir OUTPUT_DIR] [--wf_name WF_NAME]
+$ fuzzydata --help
+usage: fuzzydata [-h] [--wf_client WF_CLIENT] [--output_dir OUTPUT_DIR] [--wf_name WF_NAME]
               [--columns COLUMNS] [--rows ROWS] [--versions VERSIONS] [--bfactor BFACTOR]
               [--matfreq MATFREQ] [--npp NPP] [--log LOG] [--replay_dir REPLAY_DIR]
               [--wf_options WF_OPTIONS] [--exclude_ops EXCLUDE_OPS] [--scale_artifact SCALE_ARTIFACT]
