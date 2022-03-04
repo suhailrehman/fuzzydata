@@ -272,9 +272,10 @@ class Workflow(ABC):
         prob = np.exp(a/bfactor)  # higher weights for larger index values
 
         a = np.arange(size)
-        prob = (bfactor / (np.exp(bfactor*(size-0.5)) -1))  * np.exp(bfactor*a)
+        prob = (bfactor / (np.exp(bfactor*(size))-1)) * np.exp(bfactor*a)
+        prob = prob / prob.sum()
 
-        return self.artifact_dict[np.random.choice(list(viable_artifacts.keys()), 1)[0]]
+        return self.artifact_dict[np.random.choice(list(viable_artifacts.keys()), 1, p=prob)[0]]
 
     def __len__(self):
         return len(self.artifact_list)
