@@ -25,7 +25,7 @@ _LOG_FORMAT = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s
 
 
 def setup_arguments(args):
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog='fuzzydata')
 
     parser.add_argument("--wf_client",
                         help=f"Workflow Client to be used (Default pandas). \n"

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+if [[ ! $@ ]]; then
+    python3 -m fuzzydata.cli -h
+else
+    python3 -m fuzzydata.cli $@
+fi

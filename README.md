@@ -3,7 +3,7 @@
 [![Twitter URL](https://img.shields.io/twitter/url/https/twitter.com/fold_left.svg?style=social&label=Follow%20%40suhailrehman)](https://twitter.com/suhailrehman)
 
 
-![fuzzydata](docs/logo.png)
+![fuzzydata](https://raw.githubusercontent.com/suhailrehman/fuzzydata/main/docs/logo.png)
 ---------------------------
 # The fuzzydata Workflow Generator
 
@@ -20,7 +20,7 @@ Fuzzydata is designed to run on:
 * [`SQLIte`]()
 
 `fuzzydata` is designed to be extensible, you may implement your own client. 
-Please see the existing clients in [fuzzydata/clients](fuzzydata/clients/) for ways to extend the abstract `Artifact`, `Operation`
+Please see the existing clients in [fuzzydata/clients](https://github.com/suhailrehman/fuzzydata/tree/main/fuzzydata/clients) for ways to extend the abstract `Artifact`, `Operation`
 and `Workflow` classes for your client.
 
 ## Installation
@@ -70,11 +70,11 @@ optional arguments:
 ```
 
 # License
-[MIT License](LICENSE)
+[MIT License](https://github.com/suhailrehman/fuzzydata/blob/main/LICENSE)
 
 # Contributing to fuzzydata
-Check out the current roadmap in  [docs/roadmap.md](docs/roadmap.md). You are always welcome to develop a new client for
+Check out the current roadmap in  [docs/roadmap.md](https://github.com/suhailrehman/fuzzydata/blob/main/docs/roadmap.md). You are always welcome to develop a new client for
 fuzzydata.
 
 # Contact
-TBA
+[Suhail Rehman](https://www.suhailrehman.com) / [ChiData Group](https://data.cs.uchicago.edu) @ [Uchicago CS](https://cs.uchicago.edu/)
