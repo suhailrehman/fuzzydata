@@ -1,15 +1,20 @@
 # Roadmap / TODO Documents
 
 ## Core Enhancements
-- [ ] Core interface cleanup, minimize direct attribute access in objects
-- [ ] Customizable operation materialization/serialization rates
+- [x] Core interface cleanup, minimize direct attribute access in objects
 - [x] Correctness checking for desterministic operations
+- [ ] Customizable operation materialization rates
+  - [ ] Requires retooling our model; a transformation grammar keeps information about schema evolution as operations are chained together
+  - [ ] Dataframe operations chained by dot notation
+  - [ ] SQL using nested subqueries
+  - [ ] Execute requires special exception handling for problems occuring in between materializations
 
 ## Generator Enhancements
-- [ ] Better branching factor expression - simple exponential distribution with scale factor
+- [X] Better branching factor expression - simple exponential distribution with scale factor
 - [ ] Weighted probabilities for next operation selection
 - [ ] Operational ancestor histories and at-most two `pivot` or `groupby` operations
 - [ ] NaN Checking
+- [ ] Generate tables with tunable cardinality for specific columns - use faker columns with parameters for this
 
 
 ## Client Enhancements

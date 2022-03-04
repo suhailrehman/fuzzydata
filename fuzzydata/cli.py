@@ -101,7 +101,7 @@ def main(args):
 
     logger.info(f"FuzzyData Config: {options}")
 
-    if os.path.exists(options.output_dir+'/artifacts/'):
+    if os.path.exists(options.output_dir+'/artifacts/'):  # pragma: no cover
         sys.stderr.write(f'\nAn existing workflow exists in directory: {options.output_dir}, Overwrite (Y/N)?:')
         choice  = input().lower()
         if choice in {'yes','y', 'ye', ''}:
@@ -119,7 +119,7 @@ def main(args):
     if options.exclude_ops:
         exclude_ops = json.loads(options.exclude_ops)
 
-    if options.replay_dir:
+    if options.replay_dir:  # pragma: no cover
         scale_artifact = {}
         if options.scale_artifact:
             scale_artifact = json.loads(options.scale_artifact)
