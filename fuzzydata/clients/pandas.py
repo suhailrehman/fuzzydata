@@ -97,10 +97,7 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
         '''TODO: Explore merge code generation here or not allow without instant materialization
            Another option, add merge_source before calling, materialized with correct label'''
         super(DataFrameOperation, self).merge(key_col)
-        merge_result = self.sources[0].table.merge(self.sources[1].table, on=key_col)
-        return self.artifact_class(label=self.new_label,
-                                   from_df=merge_result,
-                                   schema_map=self.dest_schema_map)
+        return f'.merge(self.sources[1].table, on="{key_col}")'
 
     def pivot(self, index_cols: List[str], columns: List[str], value_col: List[str], agg_func: str) -> T:
         super(DataFrameOperation, self).pivot(index_cols, columns, value_col, agg_func)
@@ -111,9 +108,9 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
         return f'.replace({{ "{col_name}": {old_value} }}, {new_value})'
 
     def chain_operation(self, op, args):
-        if op == 'merge':
-            logger.error("Can't chain a merge operation yet.")
-            raise NotImplementedError
+        # if op == 'merge':
+        #     logger.error("Can't chain a merge operation yet.")
+        #     raise NotImplementedError
 
         # Chained string building since all our operations are dot
         self.code += getattr(self, op)(**args)

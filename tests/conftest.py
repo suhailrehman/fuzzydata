@@ -25,11 +25,11 @@ _static_schema_test = {'EafKN__rgb_color': 'rgb_color',
                        'mRIWF__postalcode_in_state': 'postalcode_in_state',
                        '9YjpC__credit_card_provider': 'credit_card_provider'}
 
-
-artifact_fixtures = ['dataframe_artifact', 'sql_artifact', 'modin_artifact']
-generated_artifact_fixtures = ['dataframe_artifact_generated', 'sql_artifact_generated', 'modin_artifact_generated']
-
 #TODO: Change back to include SQL
+artifact_fixtures = ['dataframe_artifact', 'modin_artifact']
+generated_artifact_fixtures = ['dataframe_artifact_generated', 'modin_artifact_generated']
+
+
 static_artifact_fixtures = ['dataframe_artifact_static', 'modin_artifact_static']
 workflow_fixtures = ['df_workflow', 'modin_workflow']
 

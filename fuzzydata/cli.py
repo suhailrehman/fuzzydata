@@ -61,10 +61,6 @@ def setup_arguments(args):
                         help="Materialization frequency, i.e. how many operations before writing out an artifact",
                         type=int, default=1)
 
-    parser.add_argument("--npp",
-                        help="Generate merges, group-bys and pivots",
-                        type=bool, default=True)
-
     parser.add_argument("--log",
                         help="Set Logging Level",
                         type=str, default='info')
@@ -138,7 +134,7 @@ def main(args):
                                      base_shape=(options.columns, options.rows),
                                      out_directory=options.output_dir, bfactor=options.bfactor,
                                      wf_options=wf_options,
-                                     exclude_ops=exclude_ops)
+                                     exclude_ops=exclude_ops, matfreq=options.matfreq)
 
         # Generate Workflow calls serialize at the end.
 

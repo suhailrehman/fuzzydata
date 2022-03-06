@@ -27,6 +27,9 @@ class Operation(Generic[T], ABC):
         self.num_operations = 0
         self.op_list = []  # List[Dict] of op names and args to chain together.
 
+    def add_source_artifact(self, s_artifact: Artifact) -> None:
+        self.sources.append(s_artifact)
+
     @abstractmethod
     def sample(self, frac: float) -> T:
         self.current_schema_map = self.current_schema_map

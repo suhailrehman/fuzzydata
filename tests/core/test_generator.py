@@ -38,7 +38,7 @@ def test_generate_table(schema, num_rows):
     assert num_rows == len(table.index)
 
 
-@pytest.mark.parametrize('wf_class,num_versions,base_shape', itertools.product(workflows_to_test,
+@pytest.mark.parametrize('wf_class,num_versions,base_shape', itertools.product(workflows_to_test.values(),
                                                                                [10, 20],
                                                                                [(10, 1000), (20, 10000)]))
 def test_generate_workflow(wf_class, num_versions, base_shape, tmpdir_factory):

@@ -254,8 +254,9 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
             source_artifact = wf.select_random_artifact(bfactor=bfactor, exclude=artifact_exclusions)
             num_ops = 0
             ops_to_do = matfreq  #TODO: Randomize or coin flip here
-
-            current_operation = wf.initialize_operation()
+            force_materialize = False
+            logger.info(f"Selected Artifact: {source_artifact}, initializing operation chain")
+            wf.initialize_operation(artifacts=[source_artifact])
 
             # if not source_artifact.schema_map:
             #     break
@@ -263,9 +264,9 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
 
             while num_ops < ops_to_do:
                 if num_ops != ops_to_do-1:  # Do not pivot in the middle of an operation chain
-                    exclude_ops.append['pivot']
+                    exclude_ops.append('pivot')
 
-                ops_choices = generate_ops_choices(schema=current_operation.current_schema_map,
+                ops_choices = generate_ops_choices(schema=wf.current_operation.current_schema_map,
                                                    num_rows=len(source_artifact), # TODO: potential num_rows bug
                                                    exclude=exclude_ops)
 
@@ -287,11 +288,15 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                                                                     schema_map=right_schema)
                         right_artifact.from_df(right_df)
                         wf.add_artifact(right_artifact)
+                        wf.current_operation.add_source_artifact(right_artifact)  # TODO: simplify within workflow
                         source_artifacts.append(right_artifact)
+                        force_materialize = True
 
                     try:
                         logger.info(f"Chaining Operation: {selected_op['op']}")
-                        current_operation = wf.chain_to_current_operation(source_artifacts, [selected_op])
+                        wf.chain_to_current_operation([selected_op])
+                        if force_materialize:
+                            break
                     except NotImplementedError as e:
                         logger.warning(f'Attempting an operation that is not implemented for this workflow type:'
                                        f" {selected_op['op']}")
@@ -305,14 +310,17 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                 else:
                     logger.warning(f"No ops choices available for {source_artifact.label}")
                     artifact_exclusions.append(source_artifact.label)
+                    force_materialize = True
                     if set(artifact_exclusions) == set(wf.artifact_list):
                         logger.error(f"Do not have any options remaining for any of the artifacts.")
                         break
                     else:
                         continue
 
+                num_ops += 1
+
             # END while num_ops < ops_to_do - we have chained maximum number of ops
-            logger.info(f"Exceuting current operation list: {current_operation}")
+            logger.info(f"Executing current operation list: {wf.current_operation}")
             wf.execute_current_operation()
             # TODO: exception handling for failed operation chain
             num_generated = len(wf.artifact_list)

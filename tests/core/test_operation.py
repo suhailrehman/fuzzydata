@@ -61,6 +61,7 @@ _merge_operation = {
     'args': {'key_col': 'a0UaD__zipcode_in_state'}
 }
 
+#TODO: Reinstate tests
 
 @pytest.mark.parametrize('artifact, op_dict', itertools.product(static_artifact_fixtures, _operations))
 def test_single_operations(artifact, request, op_dict):
@@ -89,8 +90,7 @@ def test_operation_chain(artifact, request):
     except NotImplementedError as e:
         logger.warning('Warning: {op} operation on {concrete_artifact.__class__} instance not implemented')
 
-#TODO: Reinstate tests
-@pytest.mark.skip
+
 @pytest.mark.parametrize('source_artifact', static_artifact_fixtures)
 def test_merge_op(source_artifact, request):
     concrete_artifact = request.getfixturevalue(source_artifact)
@@ -105,10 +105,11 @@ def test_merge_op(source_artifact, request):
                                                 filename=os.path.dirname(concrete_artifact.filename) + 'join_df.csv',
                                                 from_df=new_df, schema_map=new_schema, **extra_args)
 
-    join_op = concrete_artifact.operation_class(sources=[concrete_artifact, join_artifact],
-                                                  new_label='after_join', op=_merge_operation['op'],
-                                                  args=_merge_operation['args'],
+    join_op = concrete_artifact.operation_class(sources=[concrete_artifact],
+                                                  new_label='after_join',
                                                   artifact_class=concrete_artifact.__class__)
+    join_op.add_source_artifact(join_artifact)
+    join_op.chain_operation(_merge_operation['op'], _merge_operation['args'])
 
     result_artifact = join_op.execute()
 
