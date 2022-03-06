@@ -248,6 +248,7 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
 
     num_generated = len(wf.artifact_list)
     artifact_exclusions = []
+    stop_generation = False
 
     while num_generated < num_versions:
         try:
@@ -312,11 +313,9 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                     artifact_exclusions.append(source_artifact.label)
                     force_materialize = True
                     if set(artifact_exclusions) == set(wf.artifact_list):
-                        logger.error(f"Do not have any options remaining for any of the artifacts.")
-                        break
-                    else:
-                        continue
-
+                        logger.warning(f"Do not have any options remaining for any of the artifacts.")
+                        stop_generation = True
+                    break
                 num_ops += 1
 
             # END while num_ops < ops_to_do - we have chained maximum number of ops
@@ -324,6 +323,10 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
             wf.execute_current_operation()
             # TODO: exception handling for failed operation chain
             num_generated = len(wf.artifact_list)
+            if stop_generation:
+                logger.warning(f'Stopping workflow generation early: Completed {num_generated} artifacts')
+                break
+
         except Exception as e:
             logger.error('Error during generation, stopping...')
             logger.error(f'Writing out all files to {wf.out_dir}')

@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import pytest
 
-from fuzzydata.clients import supported_workflows, SQLWorkflow, travis_workflows, DataFrameWorkflow
+from fuzzydata.clients import supported_workflows, SQLWorkflow, travis_workflows, DataFrameWorkflow, ModinWorkflow
 from fuzzydata.core.generator import generate_schema, generate_table, generate_workflow
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ if "TRAVIS" in os.environ and os.environ["TRAVIS"] == "true":
 else:
     # Skipping modin tests
     # workflows_to_test = supported_workflows.values()
-    workflows_to_test = {'pandas': DataFrameWorkflow} #travis_workflows.values()
+    workflows_to_test = [DataFrameWorkflow]
 
 
 @pytest.fixture(scope="module", params=[10, 15, 20])
@@ -38,7 +38,7 @@ def test_generate_table(schema, num_rows):
     assert num_rows == len(table.index)
 
 
-@pytest.mark.parametrize('wf_class,num_versions,base_shape', itertools.product(workflows_to_test.values(),
+@pytest.mark.parametrize('wf_class,num_versions,base_shape', itertools.product(workflows_to_test,
                                                                                [10, 20],
                                                                                [(10, 1000), (20, 10000)]))
 def test_generate_workflow(wf_class, num_versions, base_shape, tmpdir_factory):
