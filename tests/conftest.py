@@ -28,8 +28,10 @@ _static_schema_test = {'EafKN__rgb_color': 'rgb_color',
 
 artifact_fixtures = ['dataframe_artifact', 'sql_artifact', 'modin_artifact']
 generated_artifact_fixtures = ['dataframe_artifact_generated', 'sql_artifact_generated', 'modin_artifact_generated']
-static_artifact_fixtures = ['dataframe_artifact_static', 'sql_artifact_static', 'modin_artifact_static']
-workflow_fixtures = ['df_workflow', 'sql_workflow', 'modin_workflow']
+
+#TODO: Change back to include SQL
+static_artifact_fixtures = ['dataframe_artifact_static', 'modin_artifact_static']
+workflow_fixtures = ['df_workflow', 'modin_workflow']
 
 
 @pytest.fixture(scope="session")

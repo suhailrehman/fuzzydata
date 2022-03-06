@@ -241,7 +241,7 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int, exclude: List[st
 
 
 def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10, 1000),
-                      out_directory='/tmp/dataset', bfactor=1.0, wf_options={}, exclude_ops=[]):
+                      out_directory='/tmp/dataset', bfactor=1.0, matfreq=1, wf_options={}, exclude_ops=[]):
 
     wf = workflow_class(name=name, out_directory=out_directory, **wf_options)
     wf.generate_base_artifact(num_cols=base_shape[0], num_rows=base_shape[1])
@@ -252,64 +252,77 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
     while num_generated < num_versions:
         try:
             source_artifact = wf.select_random_artifact(bfactor=bfactor, exclude=artifact_exclusions)
-            if not source_artifact.schema_map:
-                continue
-            ops_choices = generate_ops_choices(schema=source_artifact.schema_map,
-                                               num_rows=len(source_artifact),
-                                               exclude=exclude_ops)
+            num_ops = 0
+            ops_to_do = matfreq  #TODO: Randomize or coin flip here
 
-            if ops_choices:
-                logger.debug(f'Ops Choices: {ops_choices}')
-                selected_op = np.random.choice(ops_choices, 1)[0]
-                source_artifacts = [source_artifact]
-                # Handle Merge Op here
-                if selected_op['op'] == 'merge':
-                    if num_generated == num_versions - 1:
-                        logger.warning('Attempting to do merge as last operation; doing another op')
-                        continue
-                    right_df, right_schema = generate_pkfk_join_table(source_table=source_artifact.to_df(),
-                                                                      source_schema=source_artifact.schema_map,
-                                                                      key_col=selected_op['args']['key_col'])
-                    right_df_label = wf.generate_next_label()
-                    right_artifact = wf.initialize_new_artifact(label=right_df_label,
-                                                                filename=f"{wf.artifact_dir}/{right_df_label}.csv",
-                                                                schema_map=right_schema)
-                    right_artifact.from_df(right_df)
-                    wf.add_artifact(right_artifact)
-                    source_artifacts.append(right_artifact)
+            current_operation = wf.initialize_operation()
 
-                try:
-                    logger.info(f"Executing Operation: {tuple(a.label for a in source_artifacts)} "
-                                f"=={selected_op['op']}==> artifact_{num_generated}")
-                    wf.generate_artifact_from_operation(source_artifacts, **selected_op)
-                except ValueError as e : # Debugging modin-dask groupbyx2 error
-                    logger.error(f'Source_artifact {source_artifacts[0].label}, Selected Op: {selected_op}')
-                    raise e
+            # if not source_artifact.schema_map:
+            #     break
+            # current_schema_map = source_artifact.schema_map
 
-                # TODO: Exception Handling for empty datagframes generated
-                # if not next_df:
-                #    logger.warning('Could not apply_op, retrying...')
-            else:
-                logger.warning(f"No ops choices available for {source_artifact.label}")
-                artifact_exclusions.append(source_artifact.label)
-                if set(artifact_exclusions) == set(wf.artifact_list):
-                    logger.error(f"Do not have any options remaining for any of the artifacts.")
-                    break
+            while num_ops < ops_to_do:
+                if num_ops != ops_to_do-1:  # Do not pivot in the middle of an operation chain
+                    exclude_ops.append['pivot']
+
+                ops_choices = generate_ops_choices(schema=current_operation.current_schema_map,
+                                                   num_rows=len(source_artifact), # TODO: potential num_rows bug
+                                                   exclude=exclude_ops)
+
+                if ops_choices:
+                    logger.debug(f'Ops Choices: {ops_choices}')
+                    selected_op = np.random.choice(ops_choices, 1)[0]
+                    source_artifacts = [source_artifact]
+                    # TODO: Handle Merge Op here - materialize/execute before adding right artifact
+                    if selected_op['op'] == 'merge':
+                        if num_generated == num_versions - 1:
+                            logger.warning('Attempting to do merge as last operation; doing another op')
+                            continue
+                        right_df, right_schema = generate_pkfk_join_table(source_table=source_artifact.to_df(),
+                                                                          source_schema=source_artifact.schema_map,
+                                                                          key_col=selected_op['args']['key_col'])
+                        right_df_label = wf.generate_next_label()
+                        right_artifact = wf.initialize_new_artifact(label=right_df_label,
+                                                                    filename=f"{wf.artifact_dir}/{right_df_label}.csv",
+                                                                    schema_map=right_schema)
+                        right_artifact.from_df(right_df)
+                        wf.add_artifact(right_artifact)
+                        source_artifacts.append(right_artifact)
+
+                    try:
+                        logger.info(f"Chaining Operation: {selected_op['op']}")
+                        current_operation = wf.chain_to_current_operation(source_artifacts, [selected_op])
+                    except NotImplementedError as e:
+                        logger.warning(f'Attempting an operation that is not implemented for this workflow type:'
+                                       f" {selected_op['op']}")
+                        raise e
+                    except ValueError as e : # Debugging modin-dask groupby x2 error
+                        logger.error(f'Source_artifact {source_artifacts[0].label}, Selected Op: {selected_op}')
+                        raise e
+                    # TODO: Exception Handling for empty datagframes generated
+                    # if not next_df:
+                    #    logger.warning('Could not apply_op, retrying...')
                 else:
-                    continue
+                    logger.warning(f"No ops choices available for {source_artifact.label}")
+                    artifact_exclusions.append(source_artifact.label)
+                    if set(artifact_exclusions) == set(wf.artifact_list):
+                        logger.error(f"Do not have any options remaining for any of the artifacts.")
+                        break
+                    else:
+                        continue
 
+            # END while num_ops < ops_to_do - we have chained maximum number of ops
+            logger.info(f"Exceuting current operation list: {current_operation}")
+            wf.execute_current_operation()
+            # TODO: exception handling for failed operation chain
             num_generated = len(wf.artifact_list)
-        except NotImplementedError as e:
-            logger.warning(f'Attempting an operation that is not implemented for this workflow type:'
-                           f" {selected_op['op']}")
-            raise e
         except Exception as e:
             logger.error('Error during generation, stopping...')
             logger.error(f'Writing out all files to {wf.out_dir}')
             wf.serialize_workflow()
             raise e
 
-        # TODO Additional Exception Handling
+        # TODO Additional Exception Handling Scenarios
         '''
         except pd.errors.EmptyDataError as e:
             print("Empty DF result")

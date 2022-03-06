@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import pytest
 
-from fuzzydata.clients import supported_workflows, SQLWorkflow, travis_workflows
+from fuzzydata.clients import supported_workflows, SQLWorkflow, travis_workflows, DataFrameWorkflow
 from fuzzydata.core.generator import generate_schema, generate_table, generate_workflow
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ if "TRAVIS" in os.environ and os.environ["TRAVIS"] == "true":
 else:
     # Skipping modin tests
     # workflows_to_test = supported_workflows.values()
-    workflows_to_test = travis_workflows.values()
+    workflows_to_test = {'pandas': DataFrameWorkflow} #travis_workflows.values()
 
 
 @pytest.fixture(scope="module", params=[10, 15, 20])
@@ -50,7 +50,7 @@ def test_generate_workflow(wf_class, num_versions, base_shape, tmpdir_factory):
         else:
             exclude = []
         workflow = generate_workflow(wf_class, name=f'test_{wf_class.__name__}', num_versions=num_versions,
-                                     base_shape=base_shape, out_directory=output_path, exclude_ops=exclude)
+                                     base_shape=base_shape, out_directory=output_path, exclude_ops=exclude, matfreq=2)
 
         assert len(workflow) == num_versions
         assert os.path.exists(f"{output_path}/artifacts/")
