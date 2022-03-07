@@ -61,17 +61,15 @@ _merge_operation = {
     'args': {'key_col': 'a0UaD__zipcode_in_state'}
 }
 
-#TODO: Reinstate tests
-
 @pytest.mark.parametrize('artifact, op_dict', itertools.product(static_artifact_fixtures, _operations))
 def test_single_operations(artifact, request, op_dict):
     try:
         concrete_artifact = request.getfixturevalue(artifact)
         op, args = op_dict['op'], op_dict['args']
         logger.info(f'Testing: {op} operation on {concrete_artifact.__class__} instance')
-        sample_op = concrete_artifact.operation_class(sources=[concrete_artifact], new_label=f'after_{op}')
+        sample_op = concrete_artifact.operation_class(sources=[concrete_artifact])
         sample_op.chain_operation(op, args)
-        sample_op.execute()
+        sample_op.execute(f'after_{op}')
 
     except NotImplementedError as e:
         logger.warning('Warning: {op} operation on {concrete_artifact.__class__} instance not implemented')
@@ -81,12 +79,12 @@ def test_single_operations(artifact, request, op_dict):
 def test_operation_chain(artifact, request):
     try:
         concrete_artifact = request.getfixturevalue(artifact)
-        sample_op = concrete_artifact.operation_class(sources=[concrete_artifact], new_label=f'after')
+        sample_op = concrete_artifact.operation_class(sources=[concrete_artifact])
         op_list = _operations[:3]
         logger.info(f'Testing: {op_list} operations on {concrete_artifact.__class__} instance')
         for op_dict in op_list:
             sample_op.chain_operation(op_dict['op'], op_dict['args'])
-        sample_op.execute()
+        sample_op.execute(f'after')
     except NotImplementedError as e:
         logger.warning('Warning: {op} operation on {concrete_artifact.__class__} instance not implemented')
 
@@ -106,12 +104,11 @@ def test_merge_op(source_artifact, request):
                                                 from_df=new_df, schema_map=new_schema, **extra_args)
 
     join_op = concrete_artifact.operation_class(sources=[concrete_artifact],
-                                                  new_label='after_join',
                                                   artifact_class=concrete_artifact.__class__)
     join_op.add_source_artifact(join_artifact)
     join_op.chain_operation(_merge_operation['op'], _merge_operation['args'])
 
-    result_artifact = join_op.execute()
+    result_artifact = join_op.execute('after_join')
 
     expected_join_result_cols = set(concrete_artifact.to_df().columns).union(set(join_artifact.to_df().columns))
     assert set(result_artifact.to_df().columns) == expected_join_result_cols

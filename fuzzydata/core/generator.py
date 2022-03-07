@@ -320,7 +320,8 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
 
             # END while num_ops < ops_to_do - we have chained maximum number of ops
             logger.info(f"Executing current operation list: {wf.current_operation}")
-            wf.execute_current_operation()
+            next_label = wf.generate_next_label()
+            wf.execute_current_operation(next_label)
             # TODO: exception handling for failed operation chain
             num_generated = len(wf.artifact_list)
             if stop_generation:

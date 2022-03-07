@@ -18,7 +18,7 @@ if "TRAVIS" in os.environ and os.environ["TRAVIS"] == "true":
 else:
     # Skipping modin tests
     # workflows_to_test = supported_workflows.values()
-    workflows_to_test = [DataFrameWorkflow]
+    workflows_to_test = travis_workflows.values()
 
 
 @pytest.fixture(scope="module", params=[10, 15, 20])

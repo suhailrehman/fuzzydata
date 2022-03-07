@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 class Operation(Generic[T], ABC):
 
-    def __init__(self, sources: List[Artifact], new_label: str):
+    def __init__(self, sources: List[Artifact]):
         self.sources = sources
-        self.new_label = new_label
+        self.new_label = None
         self.dest_schema_map = None
 
         # Operation Timings
@@ -22,7 +22,7 @@ class Operation(Generic[T], ABC):
         self.end_time = None
 
         # Code Generation Variables
-        self.code = 'self.sources[0].table'
+        self.code = ''
         self.current_schema_map = self.sources[0].schema_map
         self.num_operations = 0
         self.op_list = []  # List[Dict] of op names and args to chain together.
@@ -58,7 +58,7 @@ class Operation(Generic[T], ABC):
         pass
 
     @abstractmethod
-    def merge(self, key_col: List[str]) -> T:  # TODO: add secondary source for merge
+    def merge(self, key_col: List[str]) -> T:
         self.current_schema_map = {**self.current_schema_map, **self.sources[1].schema_map}
         pass
 
@@ -89,16 +89,17 @@ class Operation(Generic[T], ABC):
 
 
     @abstractmethod
-    def materialize(self):
+    def materialize(self, new_label):
         """ python eval() or sql.execute to be called on self.code here
         Must return Artifact of same class after running operation
         TODO: Explore the difference between this and execute() """
+        self.new_label = new_label
 
-    def execute(self) -> None:
+    def execute(self, new_label) -> None:
         logger.debug(f"Before Op: {self.sources[0].to_df().columns}")
         logger.debug(f"Operation Code: {self.code}")
         self.start_time = time.perf_counter()
-        result = self.materialize()
+        result = self.materialize(new_label)
         self.end_time = time.perf_counter()
         logger.debug(f"After Op: {result.to_df()}")
         return result

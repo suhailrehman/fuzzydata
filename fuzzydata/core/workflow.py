@@ -122,11 +122,8 @@ class Workflow(ABC):
             logger.error('No current operation in workflow!')
             raise RuntimeError
 
-    def initialize_operation(self, artifacts: List[Artifact], new_label: str = None) -> Operation:
-        if not new_label:
-            new_label = self.generate_next_label()
-        self.current_operation = self.operator_class(sources=artifacts, new_label=new_label,
-                                                     artifact_class=self.artifact_class)
+    def initialize_operation(self, artifacts: List[Artifact]) -> Operation:
+        self.current_operation = self.operator_class(sources=artifacts, artifact_class=self.artifact_class)
         return self.current_operation
 
     def chain_to_current_operation(self, op_list: List[Dict]) -> None:
@@ -134,11 +131,13 @@ class Workflow(ABC):
         for op_dict in op_list:
             self.current_operation.chain_operation(op_dict['op'], op_dict['args'])
 
-    def execute_current_operation(self) -> Artifact:
+    def execute_current_operation(self, new_label) -> Artifact:
         new_artifact = None
         self.validate_current_operation()
+        if not new_label:
+            new_label = self.generate_next_label()
         try:
-            new_artifact = self.current_operation.execute()
+            new_artifact = self.current_operation.execute(new_label)
             self.add_artifact(new_artifact, from_artifacts=self.current_operation.sources, operation=self.current_operation)
 
             # TODO: Exception Handling and return value on op failure / empty df
@@ -180,10 +179,10 @@ class Workflow(ABC):
         """
         if not self.current_operation:
             logger.info('Initializing new operation...')
-            self.current_operation = self.initialize_operation(artifacts, new_label)
+            self.current_operation = self.initialize_operation(artifacts)
 
         self.chain_to_current_operation(op_list)
-        new_artifact = self.execute_current_operation()
+        new_artifact = self.execute_current_operation(new_label)
 
         return new_artifact
 

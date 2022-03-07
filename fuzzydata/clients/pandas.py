@@ -70,6 +70,7 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
     def __init__(self, *args, **kwargs):
         self.artifact_class = kwargs.pop('artifact_class', DataFrameArtifact)
         super(DataFrameOperation, self).__init__(*args, **kwargs)
+        self.code = 'self.sources[0].table' # Starting point for chained code generation.
 
     def apply(self, numeric_col: str, a: float, b: float) -> DataFrameArtifact:
         super(DataFrameOperation, self).apply(numeric_col, a, b)
@@ -94,30 +95,24 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
         return f'.query("{condition}")'
 
     def merge(self, key_col: List[str]) -> T:
-        '''TODO: Explore merge code generation here or not allow without instant materialization
-           Another option, add merge_source before calling, materialized with correct label'''
         super(DataFrameOperation, self).merge(key_col)
         return f'.merge(self.sources[1].table, on="{key_col}")'
 
     def pivot(self, index_cols: List[str], columns: List[str], value_col: List[str], agg_func: str) -> T:
         super(DataFrameOperation, self).pivot(index_cols, columns, value_col, agg_func)
-        return f'.pivot_table(index={index_cols}, columns={columns},values={value_col}, aggfunc={agg_func})'
+        return f'.pivot_table(index={index_cols}, columns={columns},values={value_col},aggfunc={agg_func})'
 
     def fill(self, col_name: str, old_value, new_value):
         super(DataFrameOperation, self).fill(col_name, old_value, new_value)
         return f'.replace({{ "{col_name}": {old_value} }}, {new_value})'
 
     def chain_operation(self, op, args):
-        # if op == 'merge':
-        #     logger.error("Can't chain a merge operation yet.")
-        #     raise NotImplementedError
-
-        # Chained string building since all our operations are dot
         self.code += getattr(self, op)(**args)
         super(DataFrameOperation, self).chain_operation(op, args)
 
-    def materialize(self):
+    def materialize(self, new_label):
         new_df = eval(self.code)
+        super(DataFrameOperation, self).materialize(new_label)
         return self.artifact_class(label=self.new_label,
                                    from_df=new_df,
                                    schema_map=self.current_schema_map)
