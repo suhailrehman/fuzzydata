@@ -29,6 +29,13 @@ _schema_type_mapping = {'string': ['EafKN__rgb_color',
 _operations = [
     {'op': 'sample',
      'args': {'frac': 0.5}},
+    {'op': 'apply',
+     'args': {'numeric_col': 'zmpoV__randomize_nb_elements',
+              'a': 0.5, 'b': 1.0}},
+    {'op': 'fill',
+     'args': {'col_name': '9YjpC__credit_card_provider',
+              'old_value': '"Visa"',
+              'new_value': '"RuPay"'}},
     {'op': 'groupby',
      'args': {'group_columns': np.random.choice(_schema_type_mapping['groupable'], 2, replace=False).tolist(),
               'agg_columns': _schema_type_mapping['numeric'],
@@ -38,7 +45,7 @@ _operations = [
      'args': {'condition': 'zmpoV__randomize_nb_elements > 5'},
      },
     {'op': 'project',
-     'args': {'output_cols': np.random.choice(_schema_type_mapping['groupable'], 4)},
+     'args': {'output_cols': np.random.choice(_schema_type_mapping['groupable'], 4).tolist()},
      },
     {'op': 'pivot',
      'args': {'index_cols': ['RFD4U__uuid4'],
@@ -46,37 +53,38 @@ _operations = [
               'value_col': ['zmpoV__randomize_nb_elements'],
               'agg_func': 'sum'},
      },
-    {'op': 'apply',
-     'args': {'numeric_col': 'zmpoV__randomize_nb_elements',
-              'a': 0.5, 'b': 1.0}},
-    {'op': 'fill',
-     'args': {'col_name': '9YjpC__credit_card_provider',
-              'old_value': 'Visa',
-              'new_value': 'RuPay'}}
 ]
+
 
 _merge_operation = {
     'op': 'merge',
     'args': {'key_col': 'a0UaD__zipcode_in_state'}
 }
 
-@pytest.mark.parametrize('artifact', generated_artifact_fixtures)
-def test_sample(artifact, request):
-    concrete_artifact = request.getfixturevalue(artifact)
-    sample_op = concrete_artifact.operation_class(sources=[concrete_artifact], new_label='sample_df',
-                                                  op='sample', args={'frac': 0.5})
-    sample_op.execute()
-
-
 @pytest.mark.parametrize('artifact, op_dict', itertools.product(static_artifact_fixtures, _operations))
-def test_operations(artifact, request, op_dict):
+def test_single_operations(artifact, request, op_dict):
     try:
         concrete_artifact = request.getfixturevalue(artifact)
         op, args = op_dict['op'], op_dict['args']
         logger.info(f'Testing: {op} operation on {concrete_artifact.__class__} instance')
-        sample_op = concrete_artifact.operation_class(sources=[concrete_artifact], new_label=f'after_{op}',
-                                                      op=op, args=args)
-        sample_op.execute()
+        sample_op = concrete_artifact.operation_class(sources=[concrete_artifact])
+        sample_op.chain_operation(op, args)
+        sample_op.execute(f'after_{op}')
+
+    except NotImplementedError as e:
+        logger.warning('Warning: {op} operation on {concrete_artifact.__class__} instance not implemented')
+
+
+@pytest.mark.parametrize('artifact', static_artifact_fixtures)
+def test_operation_chain(artifact, request):
+    try:
+        concrete_artifact = request.getfixturevalue(artifact)
+        sample_op = concrete_artifact.operation_class(sources=[concrete_artifact])
+        op_list = _operations[:3]
+        logger.info(f'Testing: {op_list} operations on {concrete_artifact.__class__} instance')
+        for op_dict in op_list:
+            sample_op.chain_operation(op_dict['op'], op_dict['args'])
+        sample_op.execute(f'after')
     except NotImplementedError as e:
         logger.warning('Warning: {op} operation on {concrete_artifact.__class__} instance not implemented')
 
@@ -95,12 +103,12 @@ def test_merge_op(source_artifact, request):
                                                 filename=os.path.dirname(concrete_artifact.filename) + 'join_df.csv',
                                                 from_df=new_df, schema_map=new_schema, **extra_args)
 
-    join_op = concrete_artifact.operation_class(sources=[concrete_artifact, join_artifact],
-                                                  new_label='after_join', op=_merge_operation['op'],
-                                                  args=_merge_operation['args'],
+    join_op = concrete_artifact.operation_class(sources=[concrete_artifact],
                                                   artifact_class=concrete_artifact.__class__)
+    join_op.add_source_artifact(join_artifact)
+    join_op.chain_operation(_merge_operation['op'], _merge_operation['args'])
 
-    result_artifact = join_op.execute()
+    result_artifact = join_op.execute('after_join')
 
     expected_join_result_cols = set(concrete_artifact.to_df().columns).union(set(join_artifact.to_df().columns))
     assert set(result_artifact.to_df().columns) == expected_join_result_cols

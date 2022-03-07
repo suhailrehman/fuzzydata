@@ -10,6 +10,14 @@ from tests.conftest import workflow_fixtures
 logger = logging.getLogger(__name__)
 
 
+_operation_list = [
+    {'op': 'sample',
+     'args': {'frac': 0.5}},
+    {'op': 'sample',
+     'args': {'frac': 0.2}},
+]
+
+
 @pytest.mark.dependency()
 @pytest.mark.parametrize('abstract_workflow', workflow_fixtures)
 def test_generate_base_artifact(abstract_workflow, request):
@@ -24,12 +32,12 @@ def test_generate_base_artifact(abstract_workflow, request):
 
 @pytest.mark.dependency(depends=['test_generate_base_artifact'])
 @pytest.mark.parametrize('abstract_workflow', workflow_fixtures)
-def test_generate_artifact_from_operation(abstract_workflow, request):
+def test_generate_artifact_from_operation_list(abstract_workflow, request):
     workflow = request.getfixturevalue(abstract_workflow)
     previous_len = len(workflow)
     source_label = workflow.artifact_list[-1]
     source_artifact = workflow.artifact_dict[source_label]
-    workflow.generate_artifact_from_operation([source_artifact], 'sample', {'frac': 0.5})
+    workflow.generate_artifact_from_operation_list([source_artifact], _operation_list)
     new_label = workflow.artifact_list[-1]
     assert len(workflow) == previous_len + 1
     assert isinstance(workflow.artifact_dict[new_label], Artifact)

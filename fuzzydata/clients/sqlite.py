@@ -3,12 +3,14 @@ from typing import List
 
 import pandas
 import sqlalchemy
+import logging
 
 from fuzzydata.core.artifact import Artifact
 from fuzzydata.core.generator import generate_table
 from fuzzydata.core.operation import Operation, T
 from fuzzydata.core.workflow import Workflow
 
+logger = logging.getLogger(__name__)
 
 class SQLArtifact(Artifact):
 
@@ -93,29 +95,22 @@ class SQLOperation(Operation['SQLArtifact']):
         self.agg_function_dict = {
             'mean': 'AVG'
         }
+        self.code = f"SELECT * FROM `{self.sources[0].label}`"
 
     def sample(self, frac: float) -> SQLArtifact:
         super(SQLOperation, self).sample(frac)
         num_rows = len(self.sources[0])
         sample_rows = math.ceil(num_rows*frac)
-        sql_sample_stmt = f"CREATE VIEW `{self.new_label}` AS " \
-                          f"SELECT * FROM `{self.sources[0].label}` ORDER BY RANDOM() " \
+        sql_sample_stmt = f"SELECT * FROM {{source}} ORDER BY RANDOM() " \
                           f"LIMIT {sample_rows} "
-        return self.artifact_class(label=self.new_label,
-                           sql_engine=self.sources[0].sql_engine,
-                           from_sql=sql_sample_stmt,
-                           schema_map=self.dest_schema_map)
+        return sql_sample_stmt
 
     def apply(self, numeric_col: str, a: float, b: float) -> SQLArtifact:
         super(SQLOperation, self).apply(numeric_col, a, b)
         new_col_name = f"{numeric_col}__{a}x_{b}"
-        sql_apply_stmt = f"CREATE VIEW `{self.new_label}` AS " \
-                         f"SELECT *, (`{numeric_col}` * {a}) + {b} AS `{new_col_name}` " \
-                         f"FROM `{self.sources[0].label}`"
-        return self.artifact_class(label=self.new_label,
-                                   sql_engine=self.sources[0].sql_engine,
-                                   from_sql=sql_apply_stmt,
-                                   schema_map=self.dest_schema_map)
+        sql_apply_stmt = f"SELECT *, (`{numeric_col}` * {a}) + {b} AS `{new_col_name}` " \
+                         f"FROM {{source}}"
+        return sql_apply_stmt
 
     def groupby(self, group_columns: List[str], agg_columns: List[str], agg_function: str) -> SQLArtifact:
         super(SQLOperation, self).groupby(group_columns, agg_columns, agg_function)
@@ -126,58 +121,57 @@ class SQLOperation(Operation['SQLArtifact']):
             agg_function = self.agg_function_dict[agg_function]
 
         agg_cols_str = f"{','.join([f'{agg_function}(`{x}`) AS `{x}`' for x in agg_columns])}"
-        sql_groupby_stmt = f"CREATE VIEW `{self.new_label}` AS SELECT {group_cols_str}, {agg_cols_str} " \
-                           f"FROM `{self.sources[0].label}` " \
+        sql_groupby_stmt = f"SELECT {group_cols_str}, {agg_cols_str} " \
+                           f"FROM {{source}} " \
                            f"GROUP BY {group_cols_str} "
-        return self.artifact_class(label=self.new_label,
-                           sql_engine=self.sources[0].sql_engine,
-                           from_sql=sql_groupby_stmt,
-                           schema_map=self.dest_schema_map)
+        return sql_groupby_stmt
 
     def project(self, output_cols: List[str]) -> T:
         super(SQLOperation, self).project(output_cols)
 
         project_predicate = ','.join([f"`{x}`" for x in output_cols])
 
-        sql_project_stmt = f"CREATE VIEW `{self.new_label}` AS " \
-                           f"SELECT {project_predicate} FROM `{self.sources[0].label}` "
-        return self.artifact_class(label=self.new_label,
-                           sql_engine=self.sources[0].sql_engine,
-                           from_sql=sql_project_stmt,
-                           schema_map=self.dest_schema_map)
+        sql_project_stmt = f"SELECT {project_predicate} FROM {{source}} "
+        return sql_project_stmt
 
     def select(self, condition: str) -> T:
         super(SQLOperation, self).select(condition)
-        sql_select_stmt = f"CREATE VIEW `{self.new_label}` AS SELECT * FROM `{self.sources[0].label}` " \
+        sql_select_stmt = f"SELECT * FROM {{source}} " \
                           f"WHERE {condition}"
-        return self.artifact_class(label=self.new_label,
-                           sql_engine=self.sources[0].sql_engine,
-                           from_sql=sql_select_stmt,
-                           schema_map=self.dest_schema_map)
+        return sql_select_stmt
 
     def merge(self, key_col: List[str]) -> T:
         super(SQLOperation, self).merge(key_col)
-        sql_select_stmt = f"CREATE VIEW `{self.new_label}` AS SELECT * FROM `{self.sources[0].label}` " \
+        sql_select_stmt = f"SELECT * FROM {{source}} " \
                           f"INNER JOIN `{self.sources[1].label}` " \
                           f"USING (`{key_col}`)"
-        return self.artifact_class(label=self.new_label,
-                           sql_engine=self.sources[0].sql_engine,
-                           from_sql=sql_select_stmt,
-                           schema_map=self.dest_schema_map)
+        return sql_select_stmt
 
     def pivot(self, index_cols: List[str], columns: List[str], value_col: List[str], agg_func: str) -> T:
         raise NotImplementedError('Generic Pivots in SQL are Hard!')
 
     def fill(self, col_name: str, old_value, new_value):
         super(SQLOperation, self).fill(col_name, old_value, new_value)
-        other_columns = ','.join([f"`{x}`" for x in list(set(self.dest_schema_map.keys()) - set(col_name))])
-        sql_fill_stmt = f"CREATE VIEW `{self.new_label}` AS SELECT {other_columns}, " \
+        other_columns = ','.join([f"`{x}`" for x in list(set(self.current_schema_map.keys()) - set(col_name))])
+        sql_fill_stmt = f"SELECT {other_columns}, " \
                         f"CASE WHEN `{col_name}` = '{old_value}' THEN '{new_value}' ELSE `{col_name}` END " \
-                        f"AS `{col_name}` FROM `{self.sources[0].label}`"
+                        f"AS `{col_name}` FROM {{source}}"
+        return sql_fill_stmt
+
+    def chain_operation(self, op, args):
+        new_code = getattr(self, op)(**args)
+        logger.debug(f'Code before chaining: {self.code}')
+        self.code = new_code.replace('{source}', f'({self.code})')
+        logger.debug(f'Code after chaining: {self.code}')
+
+    def materialize(self, new_label):
+        super(SQLOperation, self).materialize(new_label)
+        logger.debug(f'Executing SQL code: {self.code}')
+        self.code = f'CREATE VIEW `{self.new_label}` AS {self.code}'
         return self.artifact_class(label=self.new_label,
                                    sql_engine=self.sources[0].sql_engine,
-                                   from_sql=sql_fill_stmt,
-                                   schema_map=self.dest_schema_map)
+                                   from_sql=self.code,
+                                   schema_map=self.current_schema_map)
 
 
 class SQLWorkflow(Workflow):

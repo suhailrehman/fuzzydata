@@ -10,5 +10,6 @@ def test_main(tmpdir_factory):
         "--columns=10",
         "--rows=100",
         "--version=5",
+        "--matfreq=2"
     ]
     main(args)

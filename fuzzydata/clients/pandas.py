@@ -70,65 +70,52 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
     def __init__(self, *args, **kwargs):
         self.artifact_class = kwargs.pop('artifact_class', DataFrameArtifact)
         super(DataFrameOperation, self).__init__(*args, **kwargs)
+        self.code = 'self.sources[0].table' # Starting point for chained code generation.
 
     def apply(self, numeric_col: str, a: float, b: float) -> DataFrameArtifact:
         super(DataFrameOperation, self).apply(numeric_col, a, b)
-        new_col_name = f"{numeric_col}__{a}x_{b}"
-        new_df = self.sources[0].table[new_col_name] = self.sources[0].table[numeric_col].apply(lambda x: a*x+b)
-        return self.artifact_class(label=self.new_label,
-                                   from_df=new_df,
-                                   schema_map=self.dest_schema_map)
+        new_col_name = f"{numeric_col}__{int(a)}x_{int(b)}"
+        return f'.assign({new_col_name} = lambda x: x.{numeric_col}*{a}+{b})'
 
     def sample(self, frac: float) -> DataFrameArtifact:
         super(DataFrameOperation, self).sample(frac)
-        return self.artifact_class(label=self.new_label,
-                                   from_df=self.sources[0].table.sample(frac=frac),
-                                   schema_map=self.dest_schema_map)
+        return f'.sample(frac={frac})'
 
     def groupby(self, group_columns: List[str], agg_columns: List[str], agg_function: str) -> T:
         super(DataFrameOperation, self).groupby(group_columns, agg_columns, agg_function)
         logger.debug(f"Groupby on {self.sources[0].label} : {group_columns}/{agg_columns}")
-        project_df = self.sources[0].table[group_columns + agg_columns]
-        groupby_instance = getattr(project_df.groupby(group_columns), agg_function)
-        new_df = groupby_instance().reset_index(drop=False)
-        return self.artifact_class(label=self.new_label,
-                                   from_df=new_df,
-                                   schema_map=self.dest_schema_map)
+        return f'[{group_columns+agg_columns}].groupby({group_columns}).{agg_function}().reset_index()'
 
     def project(self, output_cols: List[str]) -> T:
         super(DataFrameOperation, self).project(output_cols)
-        return self.artifact_class(label=self.new_label,
-                                   from_df=self.sources[0].table[output_cols].copy(),
-                                   schema_map=self.dest_schema_map)
+        return f'[{output_cols}]'
 
     def select(self, condition: str) -> T:
         super(DataFrameOperation, self).select(condition)
-        return self.artifact_class(label=self.new_label,
-                                   from_df=self.sources[0].table.query(condition),
-                                   schema_map=self.dest_schema_map)
+        return f'.query("{condition}")'
 
     def merge(self, key_col: List[str]) -> T:
         super(DataFrameOperation, self).merge(key_col)
-        merge_result = self.sources[0].table.merge(self.sources[1].table, on=key_col)
-        return self.artifact_class(label=self.new_label,
-                                   from_df=merge_result,
-                                   schema_map=self.dest_schema_map)
+        return f'.merge(self.sources[1].table, on="{key_col}")'
 
     def pivot(self, index_cols: List[str], columns: List[str], value_col: List[str], agg_func: str) -> T:
         super(DataFrameOperation, self).pivot(index_cols, columns, value_col, agg_func)
-        pivot_result = self.sources[0].table.pivot_table(index=index_cols, columns=columns,
-                                                         values=value_col, aggfunc=agg_func)
-        return self.artifact_class(label=self.new_label,
-                                   from_df=pivot_result,
-                                   schema_map=self.dest_schema_map)
+        return f'.pivot_table(index={index_cols}, columns={columns},values={value_col},aggfunc={agg_func})'
 
     def fill(self, col_name: str, old_value, new_value):
         super(DataFrameOperation, self).fill(col_name, old_value, new_value)
-        fill_result = self.sources[0].table.copy()
-        fill_result.loc[fill_result[col_name] == old_value, col_name] = new_value
+        return f'.replace({{ "{col_name}": {old_value} }}, {new_value})'
+
+    def chain_operation(self, op, args):
+        self.code += getattr(self, op)(**args)
+        super(DataFrameOperation, self).chain_operation(op, args)
+
+    def materialize(self, new_label):
+        new_df = eval(self.code)
+        super(DataFrameOperation, self).materialize(new_label)
         return self.artifact_class(label=self.new_label,
-                                   from_df=fill_result,
-                                   schema_map=self.dest_schema_map)
+                                   from_df=new_df,
+                                   schema_map=self.current_schema_map)
 
 
 class DataFrameWorkflow(Workflow):
