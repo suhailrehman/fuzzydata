@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+
+"""
+fuzzydata.cli
+~~~~~~~~~~~~
+This module contains the command-line program to run fuzzydata
+:copyright: (c) Suhail Rehman 2022
+:license: MIT, see LICENSE for more details.
+"""
+
 import shutil
 import time
 import sys
@@ -25,6 +35,11 @@ _LOG_FORMAT = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s
 
 
 def setup_arguments(args):
+    """Processes the args arguments using argparse library
+
+    :param args: list of command line arguments
+    :return: options object containing the options listed in args or their defaults.
+    """
     parser = argparse.ArgumentParser(prog='fuzzydata')
 
     parser.add_argument("--wf_client",
@@ -82,13 +97,17 @@ def setup_arguments(args):
                              'e.g. {"artifact_0" : 1000000}',
                         type=str)
 
-
     options = parser.parse_args(args)
 
     return options
 
 
 def main(args):
+    """ Main entry point into fuzzydata CLI
+
+    :param args: command line arguments
+    :return: None
+    """
     options = setup_arguments(args)
 
     # Set log level first
@@ -99,8 +118,8 @@ def main(args):
 
     if os.path.exists(options.output_dir+'/artifacts/'):  # pragma: no cover
         sys.stderr.write(f'\nAn existing workflow exists in directory: {options.output_dir}, Overwrite (Y/N)?:')
-        choice  = input().lower()
-        if choice in {'yes','y', 'ye', ''}:
+        choice = input().lower()
+        if choice in {'yes', 'y', 'ye', ''}:
             shutil.rmtree(options.output_dir, )
         else:
             logger.info('Exiting!')

@@ -51,6 +51,14 @@ def generate_prefix(symbol_dict: str, size: int=5) -> str:
 
 
 def generate_table(num_rows: int=100, column_dict: Dict=None, pd=pandas, key_series=None) -> pandas.DataFrame:
+    """
+    Generate a table with a given schema and number of rows
+    :param num_rows: Number of rows desired in the table
+    :param column_dict: Schema Mapping (column_label->faker_provider) as a Dict
+    :param pd: pandas library to be used to generated (default pandas), you can also use modin.pandas
+    :param key_series: A pd.Series object that contains a key column to be left-appended to the df. Overrides num_rows.
+    :return: Dataframe with generated table according to spec.
+    """
     faker = Faker()
 
     series_list = []
@@ -72,6 +80,12 @@ def generate_table(num_rows: int=100, column_dict: Dict=None, pd=pandas, key_ser
 
 
 def generate_schema(num_cols: int, unique_prefix: Callable = partial(generate_prefix, _UNIQUE_DICTIONARY, size=5)) -> Dict[str, str]:
+    """
+    Generates a randomized schema given number of columns.
+    :param num_cols: Number of columns to generate.
+    :param unique_prefix: A function that generates a unique column prefix (default is 5 char random string).
+    :return: Dict of column_label->faker provider as per spec.
+    """
     column_dict = {}
     num_col_types = len(_gen_functions.keys())
     if num_cols < num_col_types:
@@ -105,6 +119,13 @@ def get_schema_type_mapping(column_dict):
 
 
 def select_rand_cols(df_col_types, num, col_type=None):
+    """
+    Select a random "num" of columns from a given column_name: type mapping
+    :param df_col_types: Mapping of column names to types.
+    :param num: Number of columns required
+    :param col_type: Column types required
+    :return:
+    """
     if not col_type:
         all_options = list(itertools.chain(df_col_types.values()))
     else:
@@ -128,6 +149,15 @@ def get_rand_percentage(minimum=0.1, maximum=0.99):
 
 def generate_pkfk_join_table(source_table, source_schema: Dict['str', 'str'],
                              key_col: str, new_col_size=None, pd=pandas):
+    """
+    Generates a randomized PK-FK table (right table) for a merge/join operation, given a source schema and key_column.
+    :param source_table: Source table to be joined.
+    :param source_schema: Source Schema.
+    :param key_col: Column Label to be used as a key.
+    :param new_col_size: Number of columns required for the new table .
+    :param pd: pandas library to be used.
+    :return:
+    """
     key_values = list(set(source_table[key_col].values))
     key_series = pd.Series(data=key_values, name=key_col)
     if not new_col_size:
@@ -242,7 +272,19 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int, exclude: List[st
 
 def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10, 1000),
                       out_directory='/tmp/dataset', bfactor=1.0, matfreq=1, wf_options={}, exclude_ops=[]):
-
+    """
+    Generate a workflow for a given client and parameters
+    :param workflow_class: Workflow class to be used (DataFrameWorkflow, ModinWorkflow, or SQLWorkflow)
+    :param name: Name for the workflow (Default: 'wf')
+    :param num_versions: Number of artifacts to generate (Default 10).
+    :param base_shape: tuple of (columns, rows) to generate as the first artifact. Default is (10,1000).
+    :param out_directory: output directory to use for generation
+    :param bfactor: branch factor for workflow graph (default 1.0)
+    :param matfreq: Number of operations to perform before materialization (default 1)
+    :param wf_options: Workflow class options as a dict (e.g. SQL string or Modin engine)
+    :param exclude_ops: List of string operations to be avoided during generation.
+    :return: Workflow object of desired type.
+    """
     wf = workflow_class(name=name, out_directory=out_directory, **wf_options)
     wf.generate_base_artifact(num_cols=base_shape[0], num_rows=base_shape[1])
 

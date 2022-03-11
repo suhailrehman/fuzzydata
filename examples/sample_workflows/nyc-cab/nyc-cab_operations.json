@@ -5,22 +5,23 @@
       "yellow_tripdata_2015-01"
     ],
     "new_label": "gb_vendor_id_amount_sum",
-    "op": "groupby",
-    "args": {
-      "group_columns": [
-        "VendorID"
-      ],
-      "agg_columns": [
-        "total_amount"
-      ],
-      "agg_function": "sum"
-    }
-  },
+    "operation_list": [{
+      "op": "groupby",
+      "args": {
+        "group_columns": [
+          "VendorID"
+        ],
+        "agg_columns": [
+          "total_amount"
+        ],
+        "agg_function": "sum"
+    }}]},
     {
       "sources": [
         "yellow_tripdata_2015-01"
       ],
       "new_label": "gb_pcount_amount_mean",
+      "operation_list": [{
       "op": "groupby",
       "args": {
         "group_columns": [
@@ -30,13 +31,14 @@
           "total_amount"
         ],
         "agg_function": "mean"
-      }
+      }}]
     },
     {
       "sources": [
         "yellow_tripdata_2015-01"
       ],
       "new_label": "gb_pcount_vendor_total_mean",
+      "operation_list": [{
       "op": "groupby",
       "args": {
         "group_columns": [
@@ -47,7 +49,7 @@
           "total_amount"
         ],
         "agg_function": "mean"
-      }
+      }}]
     }
   ]
 }
