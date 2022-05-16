@@ -15,11 +15,11 @@ The `fuzzydata` workflow generator enables:
 * Generation of randomized tables and workflows 
 * Loading and replay of workflows on multiple clients
 
-Fuzzydata is designed to run on:
+Fuzzydata is currently designed to run using the following *clients*:
 
-* [`pandas`]()
-* [`modin[dask|ray]`]()
-* [`SQLIte`]()
+* [`pandas`](https://pandas.pydata.org/)
+* [`modin[dask|ray]`](https://modin.readthedocs.io/en/stable/)
+* [`SQLIte`](https://www.sqlite.org/index.html)
 
 `fuzzydata` is designed to be extensible, you may implement your own client. 
 Please see the existing clients in [fuzzydata/clients](https://github.com/suhailrehman/fuzzydata/tree/main/fuzzydata/clients) for ways to extend the abstract `Artifact`, `Operation`
@@ -67,6 +67,9 @@ optional arguments:
                         JSON-encoded dict of {artifact_label: new_size} to be scaled up e.g. {"artifact_0"
                         : 1000000}
 ```
+
+# Documentation
+A preprint of our paper to appear at [DBTest'22](http://dbtest.io/) is [here](https://github.com/suhailrehman/fuzzydata/blob/2017754b4dc5613ba816f433ef003484b6f5816e/docs/fuzzydata-dbtest22.pdf)
 
 # License
 [MIT License](https://github.com/suhailrehman/fuzzydata/blob/main/LICENSE)
