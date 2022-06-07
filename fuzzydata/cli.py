@@ -66,7 +66,7 @@ def setup_arguments(args):
 
     parser.add_argument("--versions",
                         help="Number of versions to generate",
-                        type=int, default=100)
+                        type=int, default=10)
 
     parser.add_argument("--bfactor",
                         help="Workflow Branching factor, 0.1 is linear, 100 is star-like",
@@ -134,6 +134,11 @@ def main(args):
     if options.exclude_ops:
         exclude_ops = json.loads(options.exclude_ops)
 
+    if options.wf_client not in supported_workflows:
+        logger.error(f'{options.wf_client} is not a supported workflow client. Currently supported workflow clients '
+                     f'are {supported_workflows.keys()}')
+        sys.exit(1)
+
     if options.replay_dir:  # pragma: no cover
         scale_artifact = {}
         if options.scale_artifact:
@@ -157,9 +162,8 @@ def main(args):
 
         # Generate Workflow calls serialize at the end.
 
-    # matfreq=options.matfreq)
-
     logger.info(f'Workflow generation completed and written to directory: {workflow.out_dir}')
+    logger.info(f'To rerun this workflow in the future, use the following command:\n\nfuzzydata --replay_dir={workflow.out_dir}\n\n')
 
 
 if __name__ == '__main__':

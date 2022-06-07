@@ -188,7 +188,7 @@ class Workflow(ABC):
 
             return new_artifact
 
-        except ValueError as e:
+        except (NameError, ValueError) as e:
             logger.error(f'Could not execute Operation: {self.current_operation.op_list}')
             op_dict = self.current_operation.to_dict()
             op_dict['status'] = 'error'

@@ -27,9 +27,14 @@ and `Workflow` classes for your client.
 
 ## Installation
 
-Manual build/install using pip:
+Manual build/install using pip. 
 ```bash
 pip install fuzzydata
+```
+
+`fuzzydata` Does not install `modin` or `SQLAlchemy` by default, but this can be specified as an install option:
+```bash
+pip install fuzzydata[modin|sql|all]
 ```
 
 ## Usage

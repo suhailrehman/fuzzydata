@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="fuzzydata",
-    version="0.0.2",
+    version="0.0.3",
     scripts=['./scripts/fuzzydata'],
     author="Suhail Rehman",
     author_email="suhailrehman@gmail.com",
@@ -28,7 +28,10 @@ setup(
         'faker==13.3.0',
         'pandas==1.4.0',
         'networkx==2.7',
-        'SQLAlchemy==1.4.31',
-        'modin[all]==0.13.2'
-    ]
+    ],
+    extras_require={
+        'modin': ['modin[all]>=0.13.2'],
+        'sql': ['SQLAlchemy==1.4.31'],
+        'all': ['modin[all]>=0.13.2', 'SQLAlchemy==1.4.31']
+    }
 )

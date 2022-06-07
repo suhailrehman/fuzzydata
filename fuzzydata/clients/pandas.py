@@ -100,7 +100,7 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
 
     def pivot(self, index_cols: List[str], columns: List[str], value_col: List[str], agg_func: str) -> T:
         super(DataFrameOperation, self).pivot(index_cols, columns, value_col, agg_func)
-        return f'.pivot_table(index={index_cols}, columns={columns},values={value_col},aggfunc={agg_func})'
+        return f'.pivot_table(index={index_cols}, columns={columns},values={value_col},aggfunc="{agg_func}")'
 
     def fill(self, col_name: str, old_value, new_value):
         super(DataFrameOperation, self).fill(col_name, old_value, new_value)
