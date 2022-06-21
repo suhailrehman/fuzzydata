@@ -29,7 +29,7 @@ class ModinWorkflow(Workflow):
 
         if self.modin_engine == 'dask':
             from dask.distributed import Client
-            processes = kwargs.pop('processes', False)
+            processes = kwargs.pop('processes', True)
             Client(processes=processes)
         else:
             import ray
