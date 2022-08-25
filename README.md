@@ -74,7 +74,26 @@ optional arguments:
 ```
 
 # Documentation
-A preprint of our paper to appear at [DBTest'22](http://dbtest.io/) is [here](https://github.com/suhailrehman/fuzzydata/blob/2017754b4dc5613ba816f433ef003484b6f5816e/docs/fuzzydata-dbtest22.pdf)
+Download our paper [here](http://people.cs.uchicago.edu/~suhail/publication/rehman-fuzzydata-2022/rehman-fuzzydata-2022.pdf).
+
+If you use fuzzydata in your research, please consider citing our paper:
+```
+@inproceedings{10.1145/3531348.3532178,
+author = {Rehman, Mohammed Suhail and Elmore, Aaron},
+title = {FuzzyData: A Scalable Workload Generator for Testing Dataframe Workflow Systems},
+year = {2022},
+isbn = {9781450393539},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3531348.3532178},
+doi = {10.1145/3531348.3532178},
+booktitle = {Proceedings of the 2022 Workshop on 9th International Workshop of Testing Database Systems},
+pages = {17–24},
+numpages = {8},
+location = {Philadelphia, PA, USA},
+series = {DBTest '22}
+}
+```
 
 # License
 [MIT License](https://github.com/suhailrehman/fuzzydata/blob/main/LICENSE)
