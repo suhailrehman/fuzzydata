@@ -374,6 +374,8 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
         except Exception as e:
 
             logger.error('Error during generation, stopping...')
+            logger.error(f'Was trying to execute operation: {wf.current_operation} on soruce artifact(s): {wf.current_operation.sources}')
+            logger.error(f'Was trying to execute code: {wf.current_operation.code}')
             logger.error(f'Writing out all files to {wf.out_dir}')
             wf.serialize_workflow()
             raise e
