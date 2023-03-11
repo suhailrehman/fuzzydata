@@ -3,5 +3,5 @@ pandas
 networkx
 pytest
 pytest-cov
-SQLAlchemy
+SQLAlchemy<2.0.0
 modin[all]

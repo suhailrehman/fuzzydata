@@ -116,13 +116,41 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
         return self.artifact_class(label=self.new_label,
                                    from_df=new_df,
                                    schema_map=self.current_schema_map)
-
+    
+    @property
+    def export_code(self):
+        ''' Returns a string representation of code to run outside fuzzydata'''
+        code = self.code
+        for ix in range(len(self.sources)):
+            code = code.replace(f'self.sources[{ix}].table', self.sources[ix].label)
+        return code
 
 class DataFrameWorkflow(Workflow):
     def __init__(self, *args, **kwargs):
         super(DataFrameWorkflow, self).__init__(*args, **kwargs)
         self.artifact_class = DataFrameArtifact
         self.operator_class = DataFrameOperation
+        self.wf_code_export = "import pandas as pd\n"
 
     def initialize_new_artifact(self, label=None, filename=None, schema_map=None):
         return DataFrameArtifact(label, filename=filename, schema_map=schema_map)
+    
+
+    def add_artifact(self, artifact: Artifact,
+                    from_artifacts: List[Artifact] = None, operation: Operation = None) -> None:
+        """ Override to add code export to workflow."""
+        super(DataFrameWorkflow, self).add_artifact(artifact, from_artifacts, operation)
+        if from_artifacts:
+            self.wf_code_export += f"{self.artifact_list[-1]} = {operation.export_code}\n"
+        else:
+            self.wf_code_export += f"{artifact.label} = pd.read_csv('artifacts/{artifact.label}.{artifact.file_format}')\n"
+
+    def serialize_workflow(self, output_dir: str = None) -> None:
+        """ Override to add code export to workflow."""
+        super(DataFrameWorkflow, self).serialize_workflow(output_dir)
+        if not output_dir:
+            output_dir = self.out_dir
+        # Write out Generated code
+        with open(f"{output_dir}/{self.name}_code.py", 'w') as outfile:
+            outfile.write(self.wf_code_export)
+    
