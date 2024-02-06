@@ -28,7 +28,7 @@ setup(
         'faker>=13.3.0',
         'pandas>=1.4.0',
         'networkx>=2.7',
-        'SQLAlchemy>=1.4.31,<2.0.0'
+        'SQLAlchemy>=2.0.0'
     ],
     extras_require={
         'modin': ['modin[all]>=0.13.2']
