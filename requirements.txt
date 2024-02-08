@@ -3,5 +3,6 @@ pandas
 networkx
 pytest
 pytest-cov
+pre-commit
 SQLAlchemy>=2.0.0
 modin[all]

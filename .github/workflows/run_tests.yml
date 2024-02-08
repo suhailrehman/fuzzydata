@@ -1,0 +1,60 @@
+name: run_tests
+
+on:
+  push:
+    paths: ["fuzzydata/**", "tests/**", ".github/workflows/run_tests.yml"]
+
+  pull_request:
+    paths: ["fuzzydata/**", "tests/**", ".github/workflows/run_tests.yml"]
+
+jobs:
+#   linter:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout Code Repository
+#         uses: actions/checkout@v4
+
+#       - name: Set up Python
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: '3.10'
+
+#       - name: Run pre-commit
+#         uses: pre-commit/action@v3.0.0
+#         with:
+#           extra_args: --files projects/go/src/* projects/go/tests/*
+
+#   mypy:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout Code Repository
+#         uses: actions/checkout@v4
+
+#       - name: Set up Python
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: '3.10'
+
+#       - name: Install dependencies
+#         run: pip3 install -r projects/go/requirements.txt
+
+#       - name: Run mypy
+#         run: mypy src/*.py tests/*.py
+#         working-directory: projects/go/
+
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pytest
+        run: pytest -v
