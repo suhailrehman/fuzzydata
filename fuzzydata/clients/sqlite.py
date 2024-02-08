@@ -32,17 +32,21 @@ class SQLArtifact(Artifact):
             'csv': 'to_csv'
         }
 
-        self._get_table = f'SELECT * FROM `{self.label}`'
-        self._del_table = f'DROP TABLE IF EXISTS `{self.label}`'
-        self._num_rows = f'SELECT COUNT(*) FROM `{self.label}`'
+        self._get_table = sqlalchemy.text(f'SELECT * FROM `{self.label}`')
+        self._del_table = sqlalchemy.text(f'DROP TABLE IF EXISTS `{self.label}`')
+        self._num_rows = sqlalchemy.text(f'SELECT COUNT(*) FROM `{self.label}`')
 
         if self.from_sql:
-            self.sql_engine.execute(self.from_sql)
+            self.execute_sql(sqlalchemy.text(self.from_sql))
             if self.sync_df:
                 self.table = self.pd.read_sql(self._get_table, con=self.sql_engine)
 
         elif from_df is not None:
             self.from_df(from_df)
+
+    def execute_sql(self, sql_code):
+        with self.sql_engine.connect() as conn:
+            return conn.execute(sql_code)
 
     def generate(self, num_rows, schema):
         df = generate_table(num_rows, column_dict=schema)
@@ -78,13 +82,13 @@ class SQLArtifact(Artifact):
     def destroy(self):
         if self.sync_df:
             del self.table
-        self.sql_engine.execute(self._del_table)
+        self.execute_sql(self._del_table)
 
     def to_df(self):
         return self.pd.read_sql(self._get_table, con=self.sql_engine)
 
     def __len__(self):
-        return self.sql_engine.execute(self._num_rows).first()[0]
+        return self.execute_sql(self._num_rows).first()[0]
 
 
 class SQLOperation(Operation['SQLArtifact']):
