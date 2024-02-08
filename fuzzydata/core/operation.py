@@ -171,7 +171,6 @@ class Operation(Generic[T], ABC):
         self.start_time = time.perf_counter()
         result = self.materialize(new_label)
         self.end_time = time.perf_counter()
-        logger.debug(f"After Op: {result.to_df()}")
         return result
 
     def get_execution_time(self):
