@@ -107,8 +107,13 @@ class SQLOperation(Operation['SQLArtifact']):
     #:                       function inside a projection over a nested view.
     #:   train_test_split -- the complement side needs a seeded, stable row identity, and
     #:                       SQLite's RANDOM() cannot be seeded (see sample()).
+    #:   sort             -- ORDER BY in a view changes presentation order only; SQL result
+    #:                       sets are unordered, so the annotation would be semantically
+    #:                       meaningless and would not replay identically.
+    #:   shuffle          -- seeded random permutation requires RANDOM() to be seedable,
+    #:                       which SQLite does not support.
     unsupported_ops = frozenset({'pivot', 'normalize', 'standardize', 'label_encode',
-                                 'train_test_split'})
+                                 'train_test_split', 'sort', 'shuffle'})
 
     #: pandas dtype -> SQLite type affinity, for astype().
     _SQL_TYPES = {'int': 'INTEGER', 'int64': 'INTEGER', 'Int64': 'INTEGER',
@@ -258,6 +263,12 @@ class SQLOperation(Operation['SQLArtifact']):
         super(SQLOperation, self).one_hot_encode(column, categories)
         prefix = f"{others}," if others else ''
         return f"SELECT {prefix} {indicators} FROM {{source}}"
+
+    def sort(self, columns: List[str], ascending: bool = True) -> T:
+        raise NotImplementedError('sort is unsupported in the SQL client; see unsupported_ops')
+
+    def shuffle(self, random_state: int) -> T:
+        raise NotImplementedError('shuffle needs seeded RANDOM(); see unsupported_ops')
 
     def train_test_split(self, frac: float, random_state: int, side: str) -> T:
         raise NotImplementedError('train_test_split needs seeded sampling; see unsupported_ops')

@@ -31,12 +31,16 @@ NEW_OPERATORS = [
                                       'categories': ['I', 'II', 'III']}},
     {'op': 'train_test_split', 'args': {'frac': 0.7, 'random_state': 11, 'side': 'train'}},
     {'op': 'train_test_split', 'args': {'frac': 0.7, 'random_state': 11, 'side': 'test'}},
+    # 0.1.1 order operators
+    {'op': 'sort', 'args': {'columns': ['zmpoV__randomize_nb_elements'], 'ascending': True}},
+    {'op': 'shuffle', 'args': {'random_state': 42}},
 ]
 
 ALL_OPERATOR_NAMES = [
     'sample', 'apply', 'groupby', 'project', 'select', 'merge', 'pivot', 'fill',
     'dropna', 'dedupe', 'rename', 'astype', 'normalize', 'standardize',
     'label_encode', 'one_hot_encode', 'train_test_split',
+    'sort', 'shuffle',
 ]
 
 
@@ -132,3 +136,58 @@ def test_exclude_ops_still_works_with_new_names(tmp_path, excluded):
                            matfreq=1, seed=17, exclude_ops=[excluded])
     used = {o['op'] for op in wf.operation_list for o in op['op_list']}
     assert excluded not in used
+
+
+# ---- 0.1.1 order-operator acceptance tests -------------------------------------------
+
+def test_order_ops_generatable(tmp_path):
+    """sort and shuffle both appear in a seeded workflow, and the spec replays."""
+    from fuzzydata.clients.pandas import DataFrameWorkflow
+    # Force only sort and shuffle so both are guaranteed to appear.
+    # Use parquet to preserve dtypes across the serialize/deserialize round-trip.
+    wf = generate_workflow(DataFrameWorkflow, name='order', num_versions=20,
+                           base_shape=(10, 400), out_directory=str(tmp_path),
+                           matfreq=1, seed=42, file_format='parquet',
+                           exclude_ops=[op for op in ALL_OPERATOR_NAMES
+                                        if op not in ('sort', 'shuffle')])
+    used = {o['op'] for op in wf.operation_list for o in op['op_list']}
+    assert 'sort' in used, 'sort was not generated'
+    assert 'shuffle' in used, 'shuffle was not generated'
+
+    # spec replays: reload and compare artifact contents
+    from tests.test_determinism import _content_hash
+    original = {label: _content_hash(a.to_df()) for label, a in wf.artifact_dict.items()}
+    replayed = DataFrameWorkflow.load_workflow(str(tmp_path), str(tmp_path / 'replay'),
+                                              replay=True)
+    replayed_hashes = {label: _content_hash(a.to_df())
+                       for label, a in replayed.artifact_dict.items()}
+    assert replayed_hashes == original, 'replay diverged from original'
+
+
+def test_shuffle_records_random_state(tmp_path):
+    """shuffle must persist a concrete random_state so replay can reproduce the same order."""
+    from fuzzydata.clients.pandas import DataFrameWorkflow
+    wf = generate_workflow(DataFrameWorkflow, name='shuf', num_versions=15,
+                           base_shape=(10, 300), out_directory=str(tmp_path),
+                           matfreq=1, seed=99,
+                           exclude_ops=[op for op in ALL_OPERATOR_NAMES if op != 'shuffle'])
+    shuffles = [o for op in wf.operation_list for o in op['op_list'] if o['op'] == 'shuffle']
+    assert shuffles, 'expected at least one shuffle operation'
+    for entry in shuffles:
+        assert isinstance(entry['args'].get('random_state'), int), entry
+
+
+def test_order_ops_are_invertible(tmp_path):
+    """sort and shuffle are both declared invertible on input."""
+    df = pd.DataFrame({'val': list(range(50)), 'grp': ['a', 'b'] * 25})
+    schema = {'val': '__profiled_numeric', 'grp': '__profiled_groupable'}
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as f:
+        artifact = DataFrameArtifact('src', filename=f.name, from_df=df, schema_map=schema)
+
+    for op_name, args in [('sort', {'columns': ['val'], 'ascending': True}),
+                          ('shuffle', {'random_state': 7})]:
+        operation = DataFrameOperation(sources=[artifact])
+        operation.chain_operation(op_name, args)
+        operation.execute(f'after_{op_name}')
+        assert operation.is_invertible_on_input(), f'{op_name} should be invertible on input'

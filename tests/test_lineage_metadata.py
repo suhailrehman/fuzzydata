@@ -154,7 +154,8 @@ def test_equivalence_trivial_all_singletons(tmp_path):
     wf = generate_workflow(DataFrameWorkflow, name='eqtriv', num_versions=8,
                            base_shape=(10, 300), out_directory=str(tmp_path), matfreq=1,
                            seed=8, exclude_ops=['apply', 'rename', 'astype', 'fill',
-                                                'merge', 'train_test_split'])
+                                                'merge', 'train_test_split',
+                                                'sort', 'shuffle'])
     classes = compute_equivalence_classes(wf)
     assert len(set(classes.values())) == len(classes), 'expected all singletons'
 

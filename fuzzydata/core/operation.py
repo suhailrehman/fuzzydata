@@ -113,6 +113,25 @@ class Operation(Generic[T], ABC):
         pass
 
     @abstractmethod
+    def sort(self, columns: List[str], ascending: bool = True) -> T:
+        """Sort rows by one or more columns.
+
+        :param columns: column names to sort by.
+        :param ascending: True for ascending, False for descending.
+        """
+        self.current_schema_map = self.current_schema_map
+        pass
+
+    @abstractmethod
+    def shuffle(self, random_state: int) -> T:
+        """Randomly permute all rows.
+
+        :param random_state: concrete seed, recorded so replay reproduces the same order.
+        """
+        self.current_schema_map = self.current_schema_map
+        pass
+
+    @abstractmethod
     def apply(self, numeric_col: str, a: float, b: float) -> T:
         """ Apply a linear (ax+b) transformation for every element x in numeric_col
         :param numeric_col: The label of the column to the transformed
@@ -394,6 +413,11 @@ class Operation(Generic[T], ABC):
     def _step_is_invertible(self, op: str, args: Dict, artifact) -> bool:
         if op in self.NON_INVERTIBLE_OPS:
             return False
+
+        if op in ('sort', 'shuffle'):
+            # Row-order changes only; no information is lost. Applying a shuffle followed by
+            # any sort recovers the original order, and sort is reversible by its complement.
+            return True
 
         if op == 'rename':
             # Metadata only. Losslessly invertible by swapping the mapping.

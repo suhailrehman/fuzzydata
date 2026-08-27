@@ -401,7 +401,12 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
 
     if 'joinable' in df_col_types:
         on = select_rand_cols(df_col_types, 1, 'joinable', rng=rng)[0]
-        ops_choices.append({'op': 'merge', 'args': {'key_col': on}})
+        # generate_pkfk_join_table accesses source_artifact.to_df() (the original data),
+        # not the chain-in-progress. If a prior op in this chain renamed the key column,
+        # source_df no longer has it. Only offer merge when the key exists in the source.
+        source_cols = set(getattr(source_df, 'columns', []))
+        if not source_cols or on in source_cols:
+            ops_choices.append({'op': 'merge', 'args': {'key_col': on}})
 
     # fill: replace an existing value with a freshly faked one of the same provider type.
     # Values are passed RAW -- each client quotes them for its own target language, because
@@ -483,6 +488,19 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
             # Draw the seed now and record it, so replay reproduces the same rows.
             ops_choices.append({'op': 'sample',
                                 'args': {'frac': frac, 'random_state': draw_seed(rng)}})
+
+    # ---- order operators -----------------------------------------------------------
+    # sort needs at least one column with a well-defined ordering (numeric or groupable).
+    # Mixed-type columns can raise TypeError in pandas sort_values, so restrict to typed cols.
+    sortable_cols = (df_col_types.get('numeric', []) + df_col_types.get('groupable', []))
+    if sortable_cols:
+        sort_col = sortable_cols[int(rng.integers(0, len(sortable_cols)))]
+        ascending = bool(rng.integers(0, 2))
+        ops_choices.append({'op': 'sort',
+                            'args': {'columns': [sort_col], 'ascending': ascending}})
+
+    # shuffle: draw the seed now; it must reach the emitted code so replay is row-identical.
+    ops_choices.append({'op': 'shuffle', 'args': {'random_state': draw_seed(rng)}})
 
     # NB: this is the number of columns KEPT, despite the historical name. Floored at
     # MIN_COLUMNS: projecting down to a single column leaves an artifact with essentially no

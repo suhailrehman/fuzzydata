@@ -195,6 +195,14 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
             for c in categories)
         return f'.assign(**{{{assigns}}}).drop(columns=["{column}"])'
 
+    def sort(self, columns: List[str], ascending: bool = True) -> T:
+        super(DataFrameOperation, self).sort(columns, ascending)
+        return f'.sort_values(by={columns}, ascending={ascending})'
+
+    def shuffle(self, random_state: int) -> T:
+        super(DataFrameOperation, self).shuffle(random_state)
+        return f'.sample(frac=1, random_state={random_state}).reset_index(drop=True)'
+
     def train_test_split(self, frac: float, random_state: int, side: str) -> T:
         super(DataFrameOperation, self).train_test_split(frac, random_state, side)
         train = f'.sample(frac={frac}, random_state={random_state})'

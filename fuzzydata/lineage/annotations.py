@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 #: had it both ways, which allowed contradictory records (category=map, augmenting=true).
 #: One representation, derived one way.
 CATEGORIES = ('map', 'projection', 'selection', 'sampling', 'aggregation', 'reshaping',
-              'augmenting')
+              'augmenting', 'order')
 
 #: op -> category.
 OP_CATEGORY: Dict[str, str] = {
@@ -52,11 +52,13 @@ OP_CATEGORY: Dict[str, str] = {
     'pivot': 'reshaping',
     'one_hot_encode': 'reshaping',
     'merge': 'augmenting',
+    'sort': 'order',
+    'shuffle': 'order',
 }
 
 #: Operations whose output depends on a drawn random value. Each must record a concrete
 #: random_state in its args, or replay cannot reproduce it.
-STOCHASTIC_OPS = frozenset({'sample', 'train_test_split'})
+STOCHASTIC_OPS = frozenset({'sample', 'train_test_split', 'shuffle'})
 
 #: Operations that introduce data not present in the input. In 0.1.0 only merge qualifies:
 #: it synthesises its right-hand table via generate_pkfk_join_table() rather than joining an
