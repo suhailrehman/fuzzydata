@@ -70,9 +70,11 @@ def test_stochastic_ops_record_their_seed(tmp_path):
     reproduce it. This is the concrete defect A2 exists to fix: sample previously emitted
     .sample(frac=...) with no random_state."""
     # Exclude every other operator so sample is guaranteed to be chosen -- otherwise this
-    # test depends on which op the seed happens to pick.
+    # test depends on which op the seed happens to pick. Derived from the operator list
+    # rather than hardcoded, so adding an operator cannot silently defeat this test.
+    from tests.test_operators import ALL_OPERATOR_NAMES
     wf = _generate(tmp_path, SEED,
-                   exclude_ops=['apply', 'select', 'fill', 'groupby', 'pivot', 'merge', 'project'])
+                   exclude_ops=[op for op in ALL_OPERATOR_NAMES if op != 'sample'])
     samples = [o for op in wf.operation_list for o in op['op_list'] if o['op'] == 'sample']
     assert samples, 'expected at least one sample operation in the generated workflow'
     for op in samples:

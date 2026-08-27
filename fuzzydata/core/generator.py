@@ -1,4 +1,5 @@
 import itertools
+import math
 import os
 import string
 from collections import defaultdict
@@ -15,6 +16,7 @@ from faker import Faker
 from itertools import chain
 
 from fuzzydata.lineage.profiler import PROFILED_PREFIX, is_profiled_provider
+from fuzzydata.lineage.validity import MIN_COLUMNS, MIN_ROWS
 
 
 logging.getLogger('faker').setLevel(logging.ERROR)
@@ -35,6 +37,10 @@ ONE_HOT_MAX_CATEGORIES = 8
 
 #: train_test_split needs enough rows that neither side comes out empty.
 TRAIN_TEST_SPLIT_MIN_ROWS = 20
+
+#: pivot emits one column per distinct value of its `columns` argument. Beyond this the
+#: artifact is a degenerate wide reshape rather than a useful corpus member.
+PIVOT_MAX_OUTPUT_COLUMNS = 32
 
 
 def coerce_rng(seed_or_rng=None) -> np.random.Generator:
@@ -227,6 +233,20 @@ def generate_pkfk_join_table(source_table, source_schema: Dict['str', 'str'],
     return new_df, new_schema
 
 
+def _group_cardinality(source_df, columns) -> int:
+    """Number of distinct groups `columns` would produce, or a large sentinel when the data
+    is not available (in which case the caller allows the operation, as before)."""
+    if source_df is None or not columns:
+        return 1 << 30
+    present = [c for c in columns if c in getattr(source_df, 'columns', [])]
+    if len(present) != len(columns):
+        return 1 << 30
+    try:
+        return int(source_df[present].drop_duplicates().shape[0])
+    except (TypeError, ValueError):
+        return 1 << 30
+
+
 def _stable_sort_key(value):
     """Total order across mixed types. A column's values are not guaranteed homogeneous
     (Faker providers are not type-homogeneous, and real seed tables have object columns), so
@@ -320,8 +340,14 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
         # select: filter rows on a numeric threshold. Use a low quantile of the real data so
         # the result is non-degenerate -- a blind threshold can easily match zero rows.
         series = _numeric_series(source_df, numeric_col)
-        if series is not None:
+        if (series is not None and num_rows >= MIN_ROWS * 2
+                and float(series.min()) < float(series.max())):
+            # Threshold must sit strictly below the maximum, or the filter matches nothing.
+            # A constant column is skipped entirely for the same reason -- `col > c` where
+            # every value equals c yields an empty artifact, which is corpus poison.
             threshold = float(series.quantile(0.25))
+            if threshold >= float(series.max()):
+                threshold = float(series.min())
             # Backticks: column labels may start with a digit, which is an unrecognised
             # token unquoted in both SQLite and pandas .query(). Both accept backticks.
             ops_choices.append({'op': 'select',
@@ -332,20 +358,41 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
             num_groups = min(int(rng.integers(1, 3)), len(df_col_types['groupable']))
             group_cols = select_rand_cols(df_col_types, num_groups, 'groupable', rng=rng)
             func = select_rand_aggregate(rng=rng)
-            ops_choices.append({'op': 'groupby',
-                                'args': {'group_columns': group_cols,
-                                         'agg_columns': df_col_types['numeric'],
-                                         'agg_function': func}
-                                })
+            # groupby emits one row per distinct group. Faker's "groupable" providers include
+            # very low cardinality ones (a 3-value column collapses a 300-row artifact to 3
+            # rows), which is the single largest source of degenerate artifacts. Require
+            # enough groups to clear the validity floor when we can see the data.
+            if _group_cardinality(source_df, group_cols) >= MIN_ROWS:
+                ops_choices.append({'op': 'groupby',
+                                    'args': {'group_columns': group_cols,
+                                             'agg_columns': df_col_types['numeric'],
+                                             'agg_function': func}
+                                    })
 
             # pivot selections
             if len(df_col_types['groupable']) >= 2:
                 index, columns = select_rand_cols(df_col_types, 2, 'groupable', rng=rng)
                 values = numeric_col
-                ops_choices.append({'op': 'pivot',
-                                    'args': {'index_cols': [index], 'columns': [columns], 'value_col': [values],
-                                             'agg_func': select_rand_aggregate(rng=rng)}
-                                    })
+                # pivot emits one column per distinct value of `columns`. Faker's
+                # "groupable" providers are not all low-cardinality, so this could explode a
+                # 10-column parent into hundreds of columns. Skip when we can see that it
+                # would; without source_df we cannot tell, so allow it as before.
+                pivot_width = (source_df[columns].nunique()
+                               if source_df is not None
+                               and columns in getattr(source_df, 'columns', []) else 0)
+                pivot_height = _group_cardinality(source_df, [index])
+                if pivot_height < MIN_ROWS:
+                    logger.debug(f'Skipping pivot on index {index}: only {pivot_height} '
+                                 f'distinct values, so the result would have too few rows')
+                elif pivot_width > PIVOT_MAX_OUTPUT_COLUMNS:
+                    logger.debug(f'Skipping pivot on {columns}: would emit {pivot_width} '
+                                 f'columns (limit {PIVOT_MAX_OUTPUT_COLUMNS})')
+                else:
+                    ops_choices.append({'op': 'pivot',
+                                        'args': {'index_cols': [index], 'columns': [columns],
+                                                 'value_col': [values],
+                                                 'agg_func': select_rand_aggregate(rng=rng)}
+                                        })
 
     if 'joinable' in df_col_types:
         on = select_rand_cols(df_col_types, 1, 'joinable', rng=rng)[0]
@@ -385,9 +432,10 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
     # ---- 0.1.0 operators ----------------------------------------------------------
     all_columns = sorted(schema)
 
-    # Schema-preserving, always legal.
-    ops_choices.append({'op': 'dropna', 'args': {'subset': None}})
-    ops_choices.append({'op': 'dedupe', 'args': {'subset': None}})
+    # Schema-preserving but cardinality-reducing, so they need headroom above the floor.
+    if num_rows >= MIN_ROWS * 2:
+        ops_choices.append({'op': 'dropna', 'args': {'subset': None}})
+        ops_choices.append({'op': 'dedupe', 'args': {'subset': None}})
 
     if all_columns:
         target = all_columns[int(rng.integers(0, len(all_columns)))]
@@ -424,15 +472,21 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
 
     if num_rows >= 10:
         frac = get_rand_percentage(rng=rng)
-        # Draw the seed now and record it, so replay reproduces the same rows.
-        ops_choices.append({'op': 'sample',
-                            'args': {'frac': frac, 'random_state': draw_seed(rng)}})
+        # Repeated sampling compounds: a chain of fracs shrinks an artifact fast. Only offer
+        # the draw when the result still clears the validity floor.
+        if math.ceil(num_rows * frac) >= MIN_ROWS:
+            # Draw the seed now and record it, so replay reproduces the same rows.
+            ops_choices.append({'op': 'sample',
+                                'args': {'frac': frac, 'random_state': draw_seed(rng)}})
 
-    if len(schema) > 2:
-        num_drop = int(rng.integers(1, len(schema)-1))
+    # NB: this is the number of columns KEPT, despite the historical name. Floored at
+    # MIN_COLUMNS: projecting down to a single column leaves an artifact with essentially no
+    # distinguishing content.
+    if len(schema) > MIN_COLUMNS:
+        num_keep = int(rng.integers(MIN_COLUMNS, len(schema)))
         ops_choices.append({'op': 'project',
                             'args': {
-                                'output_cols': rng.choice(sorted(schema), num_drop, replace=False).tolist()
+                                'output_cols': rng.choice(sorted(schema), num_keep, replace=False).tolist()
                             }
                             })
 
@@ -462,7 +516,8 @@ def _generate_sibling_split(wf, source_artifact, args, rng):
 
 def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10, 1000),
                       out_directory='/tmp/dataset', bfactor=1.0, matfreq=1, wf_options=None,
-                      exclude_ops=None, seed=None, topology='bfactor', base_artifact=None):
+                      exclude_ops=None, seed=None, topology='bfactor', base_artifact=None,
+                      validate='warn'):
     """
     Generate a workflow for a given client and parameters
     :param workflow_class: Workflow class to be used (DataFrameWorkflow, ModinWorkflow, or SQLWorkflow)
@@ -484,6 +539,9 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
         Faker base artifacts have no inter-column correlation, no functional dependencies and
         no semantic column names, so a corpus built only from them teaches an encoder
         features that will not transfer to real tables.
+    :param validate: non-degeneracy check over the finished workflow.
+        'warn' (default) logs a summary, 'strict' raises DegenerateArtifactError, 'off'
+        skips it. See fuzzydata.lineage.validity.
     :param topology: parent-selection strategy, one of Workflow.TOPOLOGIES
         ('chain'|'star'|'balanced'|'random_recursive'|'bfactor'). Default 'bfactor' keeps the
         historical exponential weighting, in which case `bfactor` applies.
@@ -659,5 +717,9 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
         '''
 
     wf.serialize_workflow()
+
+    if validate and validate != 'off':
+        from fuzzydata.lineage.validity import validate_workflow
+        validate_workflow(wf, strict=(validate == 'strict'))
 
     return wf
