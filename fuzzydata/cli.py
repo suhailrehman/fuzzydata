@@ -81,6 +81,11 @@ def setup_arguments(args):
                         help="Materialization frequency, i.e. how many operations before writing out an artifact",
                         type=int, default=1)
 
+    parser.add_argument("--format",
+                        help="Artifact serialization format. parquet preserves dtypes (csv "
+                             "round-trips through text) and is faster at corpus scale.",
+                        type=str, default='csv', choices=['csv', 'parquet'])
+
     parser.add_argument("--base_artifact",
                         help="Path to a real seed table (.csv or .parquet) to use as the base "
                              "artifact instead of generating one with Faker. Its schema is "
@@ -185,7 +190,8 @@ def main(args):
                                      wf_options=wf_options,
                                      exclude_ops=exclude_ops, matfreq=options.matfreq,
                                      seed=options.seed, topology=options.topology,
-                                     base_artifact=options.base_artifact)
+                                     base_artifact=options.base_artifact,
+                                     file_format=options.format)
 
         # Generate Workflow calls serialize at the end.
 

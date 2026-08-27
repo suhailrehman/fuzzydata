@@ -36,10 +36,12 @@ class ModinArtifact(DataFrameArtifact):
         kwargs.update({'pd': mpd})  # Force loading of the modin pandas library
         super(ModinArtifact, self).__init__(*args, **kwargs)
         self._deserialization_function = {
-            'csv': self.pd.read_csv
+            'csv': self.pd.read_csv,
+            'parquet': self.pd.read_parquet,
         }
         self._serialization_function = {
-            'csv': 'to_csv'
+            'csv': 'to_csv',
+            'parquet': 'to_parquet',
         }
 
         self.operation_class = DataFrameOperation

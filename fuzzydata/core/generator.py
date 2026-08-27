@@ -517,7 +517,8 @@ def _generate_sibling_split(wf, source_artifact, args, rng):
 def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10, 1000),
                       out_directory='/tmp/dataset', bfactor=1.0, matfreq=1, wf_options=None,
                       exclude_ops=None, seed=None, topology='bfactor', base_artifact=None,
-                      validate='warn'):
+                      validate='warn', file_format='csv',
+                      operator_policy='schema_constrained', idiom=None):
     """
     Generate a workflow for a given client and parameters
     :param workflow_class: Workflow class to be used (DataFrameWorkflow, ModinWorkflow, or SQLWorkflow)
@@ -539,6 +540,16 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
         Faker base artifacts have no inter-column correlation, no functional dependencies and
         no semantic column names, so a corpus built only from them teaches an encoder
         features that will not transfer to real tables.
+    :param file_format: artifact serialization format, 'csv' or 'parquet'. parquet keeps
+        dtypes (csv round-trips everything through text, so an int column comes back as int
+        only by luck of inference) and is substantially faster at corpus scale.
+    :param operator_policy: 'schema_constrained' (default) picks uniformly among the
+        operations the schema permits. 'idiom' samples a latent workflow idiom and biases
+        selection toward its next stage, subject to schema legality -- see
+        fuzzydata.lineage.idioms. The default makes every edge conditionally independent of
+        its predecessors given the schema, so it is itself a test of the state-independence
+        assumption rather than a neutral choice; 'idiom' is the correlated alternative.
+    :param idiom: name of the idiom to use under operator_policy='idiom'. Omit to sample one.
     :param validate: non-degeneracy check over the finished workflow.
         'warn' (default) logs a summary, 'strict' raises DegenerateArtifactError, 'off'
         skips it. See fuzzydata.lineage.validity.
@@ -550,11 +561,21 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
     wf_options = wf_options or {}
     rng = coerce_rng(seed)
 
+    if operator_policy not in ('schema_constrained', 'idiom'):
+        raise ValueError(f'Unknown operator_policy {operator_policy!r}; expected '
+                         f"'schema_constrained' or 'idiom'")
+    idiom_state = None
+    if operator_policy == 'idiom':
+        from fuzzydata.lineage.idioms import IdiomState, sample_idiom
+        idiom_state = IdiomState(idiom or sample_idiom(rng))
+        logger.info(f'Workflow {name} follows the {idiom_state.name!r} idiom')
+
     # Copy the caller's exclusions: this function augments them per-operation below, and
     # mutating the caller's list leaks exclusions across calls.
     user_exclude_ops = set(exclude_ops or [])
 
-    wf = workflow_class(name=name, out_directory=out_directory, **wf_options)
+    wf = workflow_class(name=name, out_directory=out_directory, file_format=file_format,
+                        **wf_options)
 
     # Ops this client cannot express at all, excluded up front rather than raising mid-run.
     user_exclude_ops |= set(wf.operator_class.unsupported_ops)
@@ -603,7 +624,10 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                     logger.debug(f'Ops Choices: {ops_choices}')
                     # Index rather than rng.choice(): the elements are dicts, and numpy
                     # would coerce them into an object array.
-                    selected_op = ops_choices[int(rng.integers(0, len(ops_choices)))]
+                    if idiom_state is not None:
+                        selected_op = idiom_state.select(ops_choices, rng)
+                    else:
+                        selected_op = ops_choices[int(rng.integers(0, len(ops_choices)))]
                     source_artifacts = [source_artifact]
 
                     if selected_op['op'] == 'train_test_split':
@@ -631,7 +655,7 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                                                                           rng=rng)
                         right_df_label = wf.generate_next_label()
                         right_artifact = wf.initialize_new_artifact(label=right_df_label,
-                                                                    filename=f"{wf.artifact_dir}/{right_df_label}.csv",
+                                                                    filename=wf.artifact_path(right_df_label),
                                                                     schema_map=right_schema)
                         right_artifact.from_df(right_df)
                         wf.add_artifact(right_artifact)
@@ -715,6 +739,18 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
             dataset.currentdf = None
             chain_retries -= 1
         '''
+
+    # Record the latent idiom so the corpus can be stratified by it after the fact.
+    wf.metadata = {
+        'operator_policy': operator_policy,
+        'idiom': idiom_state.name if idiom_state else None,
+        'seed': seed if isinstance(seed, int) else None,
+        'topology': topology,
+        'bfactor': bfactor,
+        'matfreq': matfreq,
+        'file_format': file_format,
+        'base_artifact': str(base_artifact) if base_artifact else None,
+    }
 
     wf.serialize_workflow()
 

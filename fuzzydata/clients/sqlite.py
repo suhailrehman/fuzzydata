@@ -26,10 +26,12 @@ class SQLArtifact(Artifact):
         self.pd = pandas
 
         self._deserialization_function = {
-            'csv': self.pd.read_csv
+            'csv': self.pd.read_csv,
+            'parquet': self.pd.read_parquet,
         }
         self._serialization_function = {
-            'csv': 'to_csv'
+            'csv': 'to_csv',
+            'parquet': 'to_parquet',
         }
 
         self._get_table = sqlalchemy.text(f'SELECT * FROM `{self.label}`')
@@ -294,4 +296,5 @@ class SQLWorkflow(Workflow):
         self.sql_engine = sqlalchemy.create_engine(sql_string)
 
     def initialize_new_artifact(self, label=None, filename=None, schema_map=None):
-        return SQLArtifact(label, filename=filename, sql_engine=self.sql_engine, schema_map=schema_map)
+        return SQLArtifact(label, filename=filename, sql_engine=self.sql_engine,
+                           schema_map=schema_map, file_format=self.file_format)

@@ -21,21 +21,44 @@ from fuzzydata.core.operation import Operation
 logger = logging.getLogger(__name__)
 
 
+def detect_artifact_format(artifact_dir: str, default: str = 'csv') -> str:
+    """Infer an existing workflow's artifact format from its files on disk.
+
+    :param artifact_dir: the workflow's artifacts/ directory.
+    :param default: format to assume when the directory is empty or unrecognised.
+    :return: 'csv' or 'parquet'
+    """
+    for candidate in ('parquet', 'csv'):
+        if glob.glob(f"{artifact_dir}/*.{candidate}"):
+            return candidate
+    logger.debug(f'Could not detect artifact format in {artifact_dir}; assuming {default}')
+    return default
+
+
 class Workflow(ABC):
     """
     Class to represent a workflow in fuzzydata, Extends DiGraph from networkx with additional metadata about
     the workflow as required.
     """
-    def __init__(self, name='wf', out_directory='/tmp/fuzzydata/wf/'):
+    def __init__(self, name='wf', out_directory='/tmp/fuzzydata/wf/', file_format='csv'):
         """
         Create a new workflow with a specified name
         :param name: Name of the workflow
         :param out_directory: Output Directory for this workflow
+        :param file_format: serialization format for artifacts ('csv' or 'parquet').
+            Authoritative for artifact filenames too -- these used to be hardcoded to .csv
+            at three creation sites while serialize_workflow() used file_format, so changing
+            the format desynchronised generated filenames from serialized ones.
         """
 
         self.name = name
         self.graph = nx.DiGraph()
         self.out_dir = out_directory
+        self.file_format = file_format
+
+        #: Free-form generation parameters, written into the serialized spec so a corpus
+        #: member records how it was produced. Populated by generate_workflow().
+        self.metadata = {}
         self.artifact_dir = f"{self.out_dir}/artifacts/"
         os.makedirs(self.artifact_dir, exist_ok=True)
         self.artifact_list = []
@@ -76,6 +99,13 @@ class Workflow(ABC):
         :param from_artifacts: (optional) Source artifacts from which this new artifact was derived
         :param operation: Operation used to derive this new artifact
         """
+        # The workflow owns the serialization format. Artifacts produced by
+        # Operation.materialize() are constructed without one and would otherwise default to
+        # csv, desynchronising their filenames from what serialize_workflow() writes.
+        artifact.file_format = self.file_format
+        if not artifact.filename:
+            artifact.filename = self.artifact_path(artifact.label)
+
         self.graph.add_node(artifact.label,
                             **{
                                 'schema_map': artifact.schema_map,
@@ -92,6 +122,11 @@ class Workflow(ABC):
                 self.graph.add_edge(u.label, v, **{
                     'code': operation.code,
                 })
+
+    def artifact_path(self, label: str) -> str:
+        """On-disk path for an artifact. Single source of truth, so the extension always
+        matches self.file_format."""
+        return f"{self.artifact_dir}/{label}.{self.file_format}"
 
     def load_base_artifact(self, df, label: str = None) -> Artifact:
         """Seed the workflow from a real table instead of generating one with Faker.
@@ -112,7 +147,7 @@ class Workflow(ABC):
             label = self.generate_next_label()
         start_time = time.perf_counter()
         new_artifact = self.initialize_new_artifact(
-            label=label, filename=f"{self.artifact_dir}/{label}.csv", schema_map=schema_map)
+            label=label, filename=self.artifact_path(label), schema_map=schema_map)
         new_artifact.from_df(df)
         new_artifact.schema_map = schema_map
         end_time = time.perf_counter()
@@ -147,7 +182,7 @@ class Workflow(ABC):
         if not label:
             label = self.generate_next_label()
         start_time = time.perf_counter()
-        new_artifact = self.initialize_new_artifact(label=label, filename=f"{self.artifact_dir}/{label}.csv",
+        new_artifact = self.initialize_new_artifact(label=label, filename=self.artifact_path(label),
                                                     schema_map=column_maps)
         new_artifact.generate(num_rows, column_maps, rng=rng)
         end_time = time.perf_counter()
@@ -270,13 +305,14 @@ class Workflow(ABC):
         # Write out all artifacts
         for label, artifact in self.artifact_dict.items():
             logger.debug(f"Serialization {label}, {artifact.label}")
-            artifact.serialize(filename=f"{artifact_dir}/{label}.{artifact.file_format}")
+            artifact.serialize(filename=f"{artifact_dir}/{label}.{self.file_format}")
 
         # Write out Operation List JSON
         with open(f"{output_dir}/{self.name}_operations.json", 'w') as outfile:
             outfile.write(json.dumps({'name': self.name,
+                                      'metadata': self.metadata,
                                       'operation_list': [op for op in self.operation_list]
-                                      }, indent=2))
+                                      }, indent=2, default=str))
 
         # Write out Lineage Graph
         nx.write_edgelist(self.graph, f"{output_dir}/{self.name}_gt_graph.csv")
@@ -320,6 +356,12 @@ class Workflow(ABC):
 
             if name is None:
                 name = ops['name']
+
+            # Detect the serialization format from what is actually on disk rather than
+            # assuming csv, otherwise replaying a parquet corpus silently finds no artifacts.
+            detected = detect_artifact_format(artifact_dir)
+            wf_options = dict(wf_options or {})
+            wf_options.setdefault('file_format', detected)
 
             workflow = cls(name=name, out_directory=out_directory, **wf_options)
 

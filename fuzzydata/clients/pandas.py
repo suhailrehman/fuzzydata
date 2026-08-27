@@ -39,10 +39,12 @@ class DataFrameArtifact(Artifact):
         from_df = kwargs.pop("from_df", None)
         super(DataFrameArtifact, self).__init__(*args, **kwargs)
         self._deserialization_function = {
-            'csv': self.pd.read_csv
+            'csv': self.pd.read_csv,
+            'parquet': self.pd.read_parquet,
         }
         self._serialization_function = {
-            'csv': 'to_csv'
+            'csv': 'to_csv',
+            'parquet': 'to_parquet',
         }
 
         self.operation_class = DataFrameOperation
@@ -228,7 +230,8 @@ class DataFrameWorkflow(Workflow):
         self.wf_code_export = "import pandas as pd\n" + FLATTEN_PIVOT_SRC + "\n"
 
     def initialize_new_artifact(self, label=None, filename=None, schema_map=None):
-        return DataFrameArtifact(label, filename=filename, schema_map=schema_map)
+        return DataFrameArtifact(label, filename=filename, schema_map=schema_map,
+                                 file_format=self.file_format)
     
 
     def add_artifact(self, artifact: Artifact,
@@ -238,7 +241,9 @@ class DataFrameWorkflow(Workflow):
         if from_artifacts:
             self.wf_code_export += f"{self.artifact_list[-1]} = {operation.export_code}\n"
         else:
-            self.wf_code_export += f"{artifact.label} = pd.read_csv('artifacts/{artifact.label}.{artifact.file_format}')\n"
+            reader = 'read_parquet' if artifact.file_format == 'parquet' else 'read_csv'
+            self.wf_code_export += (f"{artifact.label} = pd.{reader}"
+                                    f"('artifacts/{artifact.label}.{artifact.file_format}')\n")
 
     def serialize_workflow(self, output_dir: str = None) -> None:
         """ Override to add code export to workflow."""

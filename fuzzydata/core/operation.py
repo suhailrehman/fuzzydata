@@ -230,8 +230,19 @@ class Operation(Generic[T], ABC):
     def astype(self, column: str, dtype: str) -> T:
         """Coerce `column` to `dtype`. Schema-preserving in shape; lossless only for
         widening casts, which is what decides invertibility.
+
+        As with label_encode, the recorded provider has to follow the actual type.
         """
-        self.current_schema_map = self.current_schema_map
+        from fuzzydata.lineage.profiler import profiled_provider
+        import numpy as np
+        try:
+            kind = np.dtype(dtype).kind
+        except TypeError:
+            kind = 'O'
+        label = 'numeric' if kind in 'ifb' else 'string'
+        if column in self.current_schema_map:
+            self.current_schema_map = {**self.current_schema_map,
+                                       column: profiled_provider(label)}
         pass
 
     @abstractmethod
@@ -250,8 +261,17 @@ class Operation(Generic[T], ABC):
 
     @abstractmethod
     def label_encode(self, column: str) -> T:
-        """Replace a categorical column's values with integer codes, in place."""
-        self.current_schema_map = self.current_schema_map
+        """Replace a categorical column's values with integer codes, in place.
+
+        The column's TYPE changes, so the schema map must change with it. Leaving the
+        original provider in place made the schema lie about the data: a later fill() would
+        draw an integer code as old_value and fake a same-provider string as new_value,
+        producing a mixed int/str column that parquet refuses to write.
+        """
+        from fuzzydata.lineage.profiler import profiled_provider
+        if column in self.current_schema_map:
+            self.current_schema_map = {**self.current_schema_map,
+                                       column: profiled_provider('numeric')}
         pass
 
     @abstractmethod
@@ -263,11 +283,14 @@ class Operation(Generic[T], ABC):
         destination schema has to be known without executing the operation, and inferring it
         from data would make replay depend on the data rather than the spec.
         """
-        source_provider = self.current_schema_map.get(column)
+        # Indicator columns are 0/1 integers, not values of the source provider. Recording
+        # the source provider would misdescribe them the same way label_encode did.
+        from fuzzydata.lineage.profiler import profiled_provider
+        indicator_provider = profiled_provider('numeric')
         self.current_schema_map = {k: v for k, v in self.current_schema_map.items()
                                    if k != column}
         for category in categories:
-            self.current_schema_map[self.one_hot_column_name(column, category)] = source_provider
+            self.current_schema_map[self.one_hot_column_name(column, category)] = indicator_provider
         pass
 
     @abstractmethod
