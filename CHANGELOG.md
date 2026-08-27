@@ -5,6 +5,70 @@ All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/). While the version is
 `0.x`, the public API is unstable and breaking changes may land in minor releases.
 
+## [0.1.1] - 2026-08-27
+
+A focused maintenance and corpus-enhancement release. No breaking changes.
+
+### Added
+
+- **`sort` and `shuffle` operators** (`category='order'`). `sort` accepts a column list and an
+  `ascending` flag; `shuffle` draws a concrete `random_state` for reproducibility. Both are
+  invertible and are included in the equivalence-class graph. `shuffle` is the only stochastic
+  member of the new category. SQLite marks both as unsupported.
+- **`invertible_bias` knob** on `generate_workflow`, both CLIs, and the corpus grid. When > 0,
+  operators whose application is invertible on the current artifact are up-weighted before
+  uniform sampling, increasing the share of artifacts in non-trivial equivalence classes without
+  changing the operator set. The bias value is recorded in `wf.metadata` and in the manifest
+  row. Implemented via `_predict_invertible()`, a schema-level mirror of `_step_is_invertible`
+  that does not require a materialized `Operation` object.
+- **Reversal-closed workflow pairs** (`fuzzydata.lineage.reversal`). `generate_reversal_pair()`
+  produces two workflows over the same set of artifact DataFrames with all provenance edges
+  flipped. Because every operator in `REVERSAL_CLOSED_OPS` (`sort`, `shuffle`, `rename`,
+  `apply`) is invertible, both directions represent valid derivations, making the pair a
+  construction for testing orientation sensitivity. `generate_corpus` gains a `reversal_pool`
+  parameter; each pair contributes two manifest rows tagged `kind='reversal_closed'` with a
+  shared `reversal_pair_id`.
+- **`topology='fitted'`** empirical distribution steering. `generate_workflow` and both CLIs
+  accept `topology_params` (a path to a JSON file or an inline dict) with `depth`,
+  `branching_factor`, and `num_artifacts` discrete empirical distributions. Parent selection
+  uses a two-phase heuristic: below the target depth it weights deeper artifacts higher to grow
+  the longest path; after the target is reached it weights artifacts by spare branching
+  capacity. The `num_artifacts` distribution overrides `num_versions`. The corpus grid gains
+  `topology_params: [None]` by default.
+- **Measured graph and equivalence fields in the manifest.** Each manifest row now includes
+  `depth`, `max_out_degree`, `num_leaves`, `num_roots`, `invertible_edge_count`,
+  `stochastic_edge_count`, `augmenting_edge_count`, `composition_depth_histogram`, and
+  `class_size_histogram`, measured from the finished workflow at generation time.
+- **`profiler.describe_table(df)`** returns a concise descriptor (`n_rows`, `n_cols`,
+  `row_bucket`, `col_bucket`, `type_mix`, `admits_generation`) for any DataFrame. When a corpus
+  workflow uses a real seed table the descriptor is written as `seed_descriptor` in its manifest
+  row.
+- **Environment block in `manifest.json`** recording the fuzzydata, Python, pandas, numpy,
+  pyarrow, and networkx versions at generation time.
+- **`corpus_cli.py` shipped as `fuzzydata-corpus`** (the existing `scripts/generate_corpus.py`
+  was absent from the sdist and wheel because `setup.py scripts=` only carried the main CLI).
+
+### Fixed
+
+- **`_content_hash` raised `TypeError` under pandas 3.0.** `astype(str)` on a column
+  containing `NA` preserves the `NA` as a float in pandas 3.0 rather than converting to
+  `"nan"`. Switched to `pd.util.hash_pandas_object`, which is NA-safe and consistent across
+  pandas 2.x and 3.x.
+- **Merge `KeyError` in chain generation.** The generator tracks schema mutations
+  (e.g. `rename` changes column names) in `current_schema_map` but reads the merge key from
+  the source artifact's materialized DataFrame, which still carries the original names. A key
+  drawn from the updated schema did not exist in the source and caused a `KeyError`. Fixed by
+  checking that the key column exists in the source DataFrame before adding `merge` to
+  `ops_choices`.
+- **SQLAlchemy moved to `extras_require['sql']`**, with a new `extras_require['all']` that
+  pulls in all optional dependencies. `pip install fuzzydata` no longer drags in SQLAlchemy for
+  users who only use the pandas client.
+
+### Changed
+
+- Dependency version ranges tightened to ranges known to work: `pandas>=1.4.0,<3.1`,
+  `numpy>=1.23.0,<2.1`, `pyarrow>=10.0.0,<26`, `faker>=13.3.0,<38`, `networkx>=2.7,<4`.
+
 ## [0.1.0] - 2026-08-27
 
 Adds everything needed to generate a corpus for content-only data lineage inference:
