@@ -1,5 +1,5 @@
 import math
-from typing import List
+from typing import Dict, List
 
 import pandas
 import sqlalchemy
@@ -53,7 +53,7 @@ class SQLArtifact(Artifact):
         # index=False for consistency with from_df(); otherwise an extra "index" column
         # appears in the table and in every downstream SELECT *.
         df.to_sql(self.label, con=self.sql_engine, if_exists='replace', index=False)
-        self.schema_map = schema
+        self.schema_map = dict(schema)
         if self.sync_df:
             self.table = df
         # self.in_memory = True
@@ -95,8 +95,35 @@ class SQLArtifact(Artifact):
 
 class SQLOperation(Operation['SQLArtifact']):
 
-    #: Generic pivots have no portable SQL expression; see pivot() below.
-    unsupported_ops = frozenset({'pivot'})
+    #: Operations with no reasonable SQLite expression.
+    #:   pivot            -- needs a dynamic column list; see pivot() below.
+    #:   normalize        -- window aggregates inside a scalar expression; expressible with
+    #:                       subqueries but the nested-view construction here makes it
+    #:                       fragile, and B4 is the place to do it properly.
+    #:   standardize      -- same, plus SQLite has no STDDEV without an extension.
+    #:   label_encode     -- needs DENSE_RANK() over the whole column, i.e. a window
+    #:                       function inside a projection over a nested view.
+    #:   train_test_split -- the complement side needs a seeded, stable row identity, and
+    #:                       SQLite's RANDOM() cannot be seeded (see sample()).
+    unsupported_ops = frozenset({'pivot', 'normalize', 'standardize', 'label_encode',
+                                 'train_test_split'})
+
+    #: pandas dtype -> SQLite type affinity, for astype().
+    _SQL_TYPES = {'int': 'INTEGER', 'int64': 'INTEGER', 'Int64': 'INTEGER',
+                  'float': 'REAL', 'float64': 'REAL',
+                  'str': 'TEXT', 'string': 'TEXT', 'object': 'TEXT',
+                  'bool': 'INTEGER'}
+
+    @staticmethod
+    def _literal(value) -> str:
+        """Render a Python value as a SQL literal, doubling embedded single quotes."""
+        if value is None:
+            return 'NULL'
+        if isinstance(value, bool):
+            return '1' if value else '0'
+        if isinstance(value, (int, float)):
+            return repr(value)
+        return "'" + str(value).replace("'", "''") + "'"
 
     def __init__(self, *args, **kwargs):
         self.artifact_class = kwargs.pop('artifact_class', SQLArtifact)
@@ -172,15 +199,66 @@ class SQLOperation(Operation['SQLArtifact']):
         other_cols = [f"`{x}`" for x in self.current_schema_map if x != col_name]
         # Trailing comma would be a syntax error when col_name is the only column.
         other_columns = (','.join(other_cols) + ',') if other_cols else ''
-        # SQL string literals: double any embedded single quote. Values arrive raw (the
-        # pandas client repr()s them for its own eval()'d code; we must not inherit that).
-        def _lit(v):
-            return "'" + str(v).replace("'", "''") + "'"
+        # Values arrive raw (the pandas client repr()s them for its own eval()'d code; we
+        # must not inherit that convention). _literal() handles SQL quoting.
         sql_fill_stmt = f"SELECT {other_columns} " \
-                        f"CASE WHEN `{col_name}` = {_lit(old_value)} THEN {_lit(new_value)} " \
+                        f"CASE WHEN `{col_name}` = {self._literal(old_value)} " \
+                        f"THEN {self._literal(new_value)} " \
                         f"ELSE `{col_name}` END " \
                         f"AS `{col_name}` FROM {{source}}"
         return sql_fill_stmt
+
+    # ------------------------------------------------------------------ 0.1.0 operators
+
+    def dropna(self, subset: List[str] = None) -> T:
+        super(SQLOperation, self).dropna(subset)
+        cols = list(subset) if subset else list(self.current_schema_map)
+        predicate = ' AND '.join(f"`{c}` IS NOT NULL" for c in cols) or '1=1'
+        return f"SELECT * FROM {{source}} WHERE {predicate}"
+
+    def dedupe(self, subset: List[str] = None) -> T:
+        super(SQLOperation, self).dedupe(subset)
+        if subset:
+            keys = ','.join(f"`{c}`" for c in subset)
+            return f"SELECT * FROM {{source}} GROUP BY {keys}"
+        return "SELECT DISTINCT * FROM {source}"
+
+    def rename(self, column_map: Dict[str, str]) -> T:
+        # Build the projection from the PRE-rename schema, then let super() update it.
+        projection = ','.join(
+            f"`{c}` AS `{column_map[c]}`" if c in column_map else f"`{c}`"
+            for c in self.current_schema_map)
+        super(SQLOperation, self).rename(column_map)
+        return f"SELECT {projection} FROM {{source}}"
+
+    def astype(self, column: str, dtype: str) -> T:
+        super(SQLOperation, self).astype(column, dtype)
+        sql_type = self._SQL_TYPES.get(dtype, 'TEXT')
+        others = ','.join(f"`{c}`" for c in self.current_schema_map if c != column)
+        prefix = f"{others}," if others else ''
+        return (f"SELECT {prefix} CAST(`{column}` AS {sql_type}) AS `{column}` "
+                f"FROM {{source}}")
+
+    def normalize(self, column: str) -> T:
+        raise NotImplementedError('normalize needs window aggregates; see unsupported_ops')
+
+    def standardize(self, column: str) -> T:
+        raise NotImplementedError('standardize needs STDDEV; see unsupported_ops')
+
+    def label_encode(self, column: str) -> T:
+        raise NotImplementedError('label_encode needs DENSE_RANK; see unsupported_ops')
+
+    def one_hot_encode(self, column: str, categories: List[str]) -> T:
+        indicators = ','.join(
+            f"CASE WHEN `{column}` = {self._literal(c)} THEN 1 ELSE 0 END "
+            f"AS `{self.one_hot_column_name(column, c)}`" for c in categories)
+        others = ','.join(f"`{c}`" for c in self.current_schema_map if c != column)
+        super(SQLOperation, self).one_hot_encode(column, categories)
+        prefix = f"{others}," if others else ''
+        return f"SELECT {prefix} {indicators} FROM {{source}}"
+
+    def train_test_split(self, frac: float, random_state: int, side: str) -> T:
+        raise NotImplementedError('train_test_split needs seeded sampling; see unsupported_ops')
 
     def chain_operation(self, op, args):
         new_code = getattr(self, op)(**args)

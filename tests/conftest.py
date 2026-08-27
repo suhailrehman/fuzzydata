@@ -51,63 +51,80 @@ static_artifact_fixtures = _with_modin(['dataframe_artifact_static', 'sql_artifa
 workflow_fixtures = _with_modin(['df_workflow', 'sql_workflow'], 'modin_workflow')
 
 
+# Each artifact variant gets its OWN object. They used to be derived from one another --
+# *_static and *_generated both called .generate() on the same shared session artifact -- so
+# whichever was instantiated first won, and adding a test file that touched them in a
+# different order silently corrupted the others. Independent objects remove the ordering
+# dependence entirely.
+
+def _tmp_csv(tmpdir_factory, name):
+    return tmpdir_factory.mktemp(f'fuzzydata_{name}').join(f'{name}.csv')
+
+
+def _sql_engine(tmpdir_factory, name):
+    tmp_dir = tmpdir_factory.mktemp(f'fuzzydata_{name}')
+    logger.info(f'Test Directory: {tmp_dir}')
+    return sqlalchemy.create_engine(f"sqlite:///{tmp_dir}/{name}.db"), tmp_dir.join(f'{name}.csv')
+
+
 @pytest.fixture(scope="session")
 def dataframe_artifact(tmpdir_factory):
-    tmp_dir = tmpdir_factory.mktemp("fuzzydata_df_test")
-    return DataFrameArtifact('test_df', filename=tmp_dir.join('test_df.csv'))
+    return DataFrameArtifact('test_df', filename=_tmp_csv(tmpdir_factory, 'df_test'))
 
 
 @pytest.fixture(scope="session")
 def modin_artifact(tmpdir_factory):
-    tmp_dir = tmpdir_factory.mktemp("fuzzydata_modin_test")
-    return ModinArtifact('test_df', filename=tmp_dir.join('test_df.csv'))
+    return ModinArtifact('test_df', filename=_tmp_csv(tmpdir_factory, 'modin_test'))
 
 
 @pytest.fixture(scope="session")
 def sql_artifact(tmpdir_factory):
-    tmp_dir = tmpdir_factory.mktemp("fuzzydata_sql_test")
-    logger.info(f'Test Directory: {tmp_dir}')
-    sql_engine = sqlalchemy.create_engine(f"sqlite:///{tmp_dir}/fuzzydata_test.db")
-    return SQLArtifact('test_df', filename=tmp_dir.join('test_df.csv'), sql_engine=sql_engine)
+    engine, filename = _sql_engine(tmpdir_factory, 'sql_test')
+    return SQLArtifact('test_df', filename=filename, sql_engine=engine)
 
 
 @pytest.fixture(scope="session")
-def dataframe_artifact_generated(dataframe_artifact):
-    tmp_schema = generate_schema(20)
-    dataframe_artifact.generate(100, tmp_schema)
-    return dataframe_artifact
+def dataframe_artifact_generated(tmpdir_factory):
+    artifact = DataFrameArtifact('gen_df', filename=_tmp_csv(tmpdir_factory, 'df_gen'))
+    artifact.generate(100, generate_schema(20))
+    return artifact
 
 
 @pytest.fixture(scope="session")
-def sql_artifact_generated(sql_artifact):
-    tmp_schema = generate_schema(20)
-    sql_artifact.generate(100, tmp_schema)
-    return sql_artifact
+def sql_artifact_generated(tmpdir_factory):
+    engine, filename = _sql_engine(tmpdir_factory, 'sql_gen')
+    artifact = SQLArtifact('gen_df', filename=filename, sql_engine=engine)
+    artifact.generate(100, generate_schema(20))
+    return artifact
 
 
 @pytest.fixture(scope="session")
-def modin_artifact_generated(modin_artifact):
-    tmp_schema = generate_schema(20)
-    modin_artifact.generate(100, tmp_schema)
-    return modin_artifact
+def modin_artifact_generated(tmpdir_factory):
+    artifact = ModinArtifact('gen_df', filename=_tmp_csv(tmpdir_factory, 'modin_gen'))
+    artifact.generate(100, generate_schema(20))
+    return artifact
 
 
 @pytest.fixture(scope="session")
-def dataframe_artifact_static(dataframe_artifact):
-    dataframe_artifact.generate(100, _static_schema_test)
-    return dataframe_artifact
+def dataframe_artifact_static(tmpdir_factory):
+    artifact = DataFrameArtifact('static_df', filename=_tmp_csv(tmpdir_factory, 'df_static'))
+    artifact.generate(100, dict(_static_schema_test))
+    return artifact
 
 
 @pytest.fixture(scope="session")
-def sql_artifact_static(sql_artifact):
-    sql_artifact.generate(100, _static_schema_test)
-    return sql_artifact
+def sql_artifact_static(tmpdir_factory):
+    engine, filename = _sql_engine(tmpdir_factory, 'sql_static')
+    artifact = SQLArtifact('static_df', filename=filename, sql_engine=engine)
+    artifact.generate(100, dict(_static_schema_test))
+    return artifact
 
 
 @pytest.fixture(scope="session")
-def modin_artifact_static(modin_artifact):
-    modin_artifact.generate(100, _static_schema_test)
-    return modin_artifact
+def modin_artifact_static(tmpdir_factory):
+    artifact = ModinArtifact('static_df', filename=_tmp_csv(tmpdir_factory, 'modin_static'))
+    artifact.generate(100, dict(_static_schema_test))
+    return artifact
 
 
 @pytest.fixture(scope='session')

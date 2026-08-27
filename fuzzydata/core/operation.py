@@ -50,6 +50,11 @@ class Operation(Generic[T], ABC):
         self.num_operations = 0
         self.op_list = []  # List[Dict] of op names and args to chain together.
 
+        #: Shared id linking operations that were co-generated from one parent and together
+        #: partition it (currently only train_test_split). None for ordinary operations.
+        #: Recorded because the relationship is impossible to recover after generation.
+        self.sibling_group = None
+
     def add_source_artifact(self, s_artifact: Artifact) -> None:
         """Add a source artifact to this operation. """
         self.sources.append(s_artifact)
@@ -72,6 +77,12 @@ class Operation(Generic[T], ABC):
         logger.debug(f'Recovered schema map for {self.new_label} by profiling: {resolved}')
         self.current_schema_map = resolved
         return resolved
+
+    @staticmethod
+    def one_hot_column_name(column: str, category) -> str:
+        """Name of an indicator column produced by one_hot_encode. Defined once so the
+        schema-map transformation and every client's emitted code agree."""
+        return f'{column}__is_{category}'
 
     @staticmethod
     def apply_column_name(numeric_col: str, a, b) -> str:
@@ -183,6 +194,98 @@ class Operation(Generic[T], ABC):
         self.current_schema_map = self.current_schema_map
         pass
 
+    # ------------------------------------------------------------------ 0.1.0 operators
+    # The set above is BI-shaped. The ML-training-data workflows this corpus represents are
+    # dominated by the operators below. Each declares its schema-map transformation here;
+    # clients emit the code.
+
+    @abstractmethod
+    def dropna(self, subset: List[str] = None) -> T:
+        """Drop rows with nulls, optionally restricted to `subset`.
+        Cardinality-reducing, schema-preserving, not invertible.
+        """
+        self.current_schema_map = self.current_schema_map
+        pass
+
+    @abstractmethod
+    def dedupe(self, subset: List[str] = None) -> T:
+        """Drop duplicate rows, optionally keyed on `subset`.
+        Cardinality-reducing and schema-preserving. Note it can *increase* the empirical
+        entropy of the row distribution by removing over-represented rows.
+        """
+        self.current_schema_map = self.current_schema_map
+        pass
+
+    @abstractmethod
+    def rename(self, column_map: Dict[str, str]) -> T:
+        """Rename columns. Metadata-only, so losslessly invertible -- which is why it matters
+        for the equivalence classes in fuzzydata.lineage.equivalence.
+        :param column_map: {old_name: new_name}
+        """
+        self.current_schema_map = {column_map.get(k, k): v
+                                   for k, v in self.current_schema_map.items()}
+        pass
+
+    @abstractmethod
+    def astype(self, column: str, dtype: str) -> T:
+        """Coerce `column` to `dtype`. Schema-preserving in shape; lossless only for
+        widening casts, which is what decides invertibility.
+        """
+        self.current_schema_map = self.current_schema_map
+        pass
+
+    @abstractmethod
+    def normalize(self, column: str) -> T:
+        """Min-max scale `column` into [0, 1], in place. Invertible in principle but the
+        constants are not recorded, so treated as lossy here.
+        """
+        self.current_schema_map = self.current_schema_map
+        pass
+
+    @abstractmethod
+    def standardize(self, column: str) -> T:
+        """Zero-mean, unit-variance scale `column`, in place."""
+        self.current_schema_map = self.current_schema_map
+        pass
+
+    @abstractmethod
+    def label_encode(self, column: str) -> T:
+        """Replace a categorical column's values with integer codes, in place."""
+        self.current_schema_map = self.current_schema_map
+        pass
+
+    @abstractmethod
+    def one_hot_encode(self, column: str, categories: List[str]) -> T:
+        """Expand a categorical column into one indicator column per category.
+
+        Column-count explosion -- this is the operator that stresses schema tracking hardest.
+        `categories` is recorded explicitly rather than inferred at run time, because the
+        destination schema has to be known without executing the operation, and inferring it
+        from data would make replay depend on the data rather than the spec.
+        """
+        source_provider = self.current_schema_map.get(column)
+        self.current_schema_map = {k: v for k, v in self.current_schema_map.items()
+                                   if k != column}
+        for category in categories:
+            self.current_schema_map[self.one_hot_column_name(column, category)] = source_provider
+        pass
+
+    @abstractmethod
+    def train_test_split(self, frac: float, random_state: int, side: str) -> T:
+        """One side of a train/test split.
+
+        Modelled as two sibling operations sharing `random_state`, linked by a sibling_group
+        id, because Operation is single-destination (making it multi-destination is Track B).
+        The two sides are COMPLEMENTARY, not two independent draws: `side='train'` takes the
+        sampled rows and `side='test'` takes the remainder. Sharing a seed alone would give
+        two overlapping samples mislabelled as a partition.
+        :param frac: fraction of rows in the train side.
+        :param random_state: shared seed; identical for both siblings.
+        :param side: 'train' or 'test'.
+        """
+        self.current_schema_map = self.current_schema_map
+        pass
+
     @abstractmethod
     def chain_operation(self, op, args):
         """
@@ -227,11 +330,14 @@ class Operation(Generic[T], ABC):
 
     def to_dict(self) -> dict:
         """ Return a dictionary representation of this operation"""
-        return {
+        record = {
             'sources': [s.label for s in self.sources],
             'new_label': self.new_label,
             'op_list': self.op_list,
         }
+        if self.sibling_group is not None:
+            record['sibling_group'] = self.sibling_group
+        return record
 
     def __str__(self):
         return str(self.to_dict())

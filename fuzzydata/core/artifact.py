@@ -33,7 +33,9 @@ class Artifact(ABC):
         self.label = label
         self.in_memory = in_memory
         self.file_format = file_format
-        self.schema_map = schema_map
+        # Copy: aliasing the caller's dict lets an in-place edit anywhere leak into every
+        # artifact that was constructed from the same mapping.
+        self.schema_map = dict(schema_map) if schema_map else schema_map
 
         logger.debug(f'New Artifact: {label}')
 

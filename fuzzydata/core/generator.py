@@ -30,6 +30,12 @@ _DEFAULT_RNG = np.random.default_rng()
 #: Upper bound for seeds handed to third parties (Faker, pandas random_state).
 _SEED_MAX = 2 ** 32
 
+#: Cap on one_hot_encode's category count, to bound the column-count explosion.
+ONE_HOT_MAX_CATEGORIES = 8
+
+#: train_test_split needs enough rows that neither side comes out empty.
+TRAIN_TEST_SPLIT_MIN_ROWS = 20
+
 
 def coerce_rng(seed_or_rng=None) -> np.random.Generator:
     """Normalise None | int | Generator into a Generator.
@@ -208,7 +214,7 @@ def generate_pkfk_join_table(source_table, source_schema: Dict['str', 'str'],
     rng = coerce_rng(rng)
     # sorted() so the key order does not depend on set iteration order, which varies with
     # PYTHONHASHSEED and would make generation irreproducible even under a fixed seed.
-    key_values = sorted(set(source_table[key_col].values))
+    key_values = sorted(set(source_table[key_col].values), key=_stable_sort_key)
     key_series = pd.Series(data=key_values, name=key_col)
     if not new_col_size:
         new_col_size = rng.integers(2, max(3, len(source_table.columns)+1))
@@ -219,6 +225,14 @@ def generate_pkfk_join_table(source_table, source_schema: Dict['str', 'str'],
     new_schema[key_col] = source_schema[key_col]
 
     return new_df, new_schema
+
+
+def _stable_sort_key(value):
+    """Total order across mixed types. A column's values are not guaranteed homogeneous
+    (Faker providers are not type-homogeneous, and real seed tables have object columns), so
+    a bare sorted() raises TypeError comparing e.g. int to str. Sorting by (type name, text)
+    is deterministic, which is all we need -- the goal is reproducibility, not collation."""
+    return (type(value).__name__, str(value))
 
 
 def _py_scalar(value):
@@ -368,6 +382,46 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
                                                  'old_value': old_value,
                                                  'new_value': new_value}})
 
+    # ---- 0.1.0 operators ----------------------------------------------------------
+    all_columns = sorted(schema)
+
+    # Schema-preserving, always legal.
+    ops_choices.append({'op': 'dropna', 'args': {'subset': None}})
+    ops_choices.append({'op': 'dedupe', 'args': {'subset': None}})
+
+    if all_columns:
+        target = all_columns[int(rng.integers(0, len(all_columns)))]
+        ops_choices.append({'op': 'rename',
+                            'args': {'column_map': {target: f'{target}__renamed'}}})
+
+    # astype only on numeric columns, and only widening casts. Casting a free-text column to
+    # a number yields nulls (pandas) or zeroes (SQLite) -- a silent corruption, not a cast.
+    if 'numeric' in df_col_types:
+        cast_col = select_rand_cols(df_col_types, 1, 'numeric', rng=rng)[0]
+        ops_choices.append({'op': 'astype', 'args': {'column': cast_col, 'dtype': 'float64'}})
+        ops_choices.append({'op': 'normalize', 'args': {'column': cast_col}})
+        ops_choices.append({'op': 'standardize', 'args': {'column': cast_col}})
+
+    if 'groupable' in df_col_types:
+        enc_col = select_rand_cols(df_col_types, 1, 'groupable', rng=rng)[0]
+        ops_choices.append({'op': 'label_encode', 'args': {'column': enc_col}})
+
+        # one_hot_encode needs the concrete category list: the destination schema has to be
+        # known from the spec alone, so it cannot be inferred from data at replay time.
+        # Capped to keep the column-count explosion bounded.
+        if source_df is not None and enc_col in getattr(source_df, 'columns', []):
+            distinct = source_df[enc_col].dropna().unique()
+            if 0 < len(distinct) <= ONE_HOT_MAX_CATEGORIES:
+                categories = sorted((_py_scalar(c) for c in distinct), key=_stable_sort_key)
+                ops_choices.append({'op': 'one_hot_encode',
+                                    'args': {'column': enc_col, 'categories': categories}})
+
+    # train_test_split needs enough rows for both sides to be non-empty.
+    if num_rows >= TRAIN_TEST_SPLIT_MIN_ROWS:
+        ops_choices.append({'op': 'train_test_split',
+                            'args': {'frac': get_rand_percentage(0.5, 0.9, rng=rng),
+                                     'random_state': draw_seed(rng)}})
+
     if num_rows >= 10:
         frac = get_rand_percentage(rng=rng)
         # Draw the seed now and record it, so replay reproduces the same rows.
@@ -387,6 +441,23 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
     ops_choices = list(filter(lambda x: x['op'] not in exclude, ops_choices))
 
     return ops_choices
+
+
+def _generate_sibling_split(wf, source_artifact, args, rng):
+    """Materialize both sides of a train/test split as sibling operations.
+
+    Operation is single-destination, so a two-output operator has to be modelled as two
+    operations. They share `random_state` AND a `sibling_group` id, which is what lets a
+    consumer recover that the two children partition their parent rather than being two
+    independent derivations. Making Operation genuinely multi-destination is Track B (B2).
+    """
+    sibling_group = f'{wf.name}_split_{draw_seed(rng)}'
+    for side in ('train', 'test'):
+        wf.initialize_operation(artifacts=[source_artifact])
+        wf.current_operation.sibling_group = sibling_group
+        wf.chain_to_current_operation([{'op': 'train_test_split',
+                                        'args': {**args, 'side': side}}])
+        wf.execute_current_operation(wf.generate_next_label())
 
 
 def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10, 1000),
@@ -449,6 +520,7 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
             num_ops = 0
             ops_to_do = matfreq  #TODO: Randomize or coin flip here
             force_materialize = False
+            did_sibling_split = False
             logger.info(f"Selected Artifact: {source_artifact}, initializing operation chain")
             wf.initialize_operation(artifacts=[source_artifact])
 
@@ -475,6 +547,21 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                     # would coerce them into an object array.
                     selected_op = ops_choices[int(rng.integers(0, len(ops_choices)))]
                     source_artifacts = [source_artifact]
+
+                    if selected_op['op'] == 'train_test_split':
+                        # Two destinations from one parent, which the single-destination
+                        # Operation model cannot express directly. Emitted as two sibling
+                        # operations sharing a random_state and a sibling_group id. The
+                        # sides are complementary (train = sampled rows, test = remainder),
+                        # so together they partition the parent.
+                        if num_generated > num_versions - 2:
+                            logger.info('Not enough remaining versions for a train/test '
+                                        'split; choosing another operation')
+                            continue
+                        _generate_sibling_split(wf, source_artifact, selected_op['args'], rng)
+                        did_sibling_split = True
+                        break
+
                     # TODO: Handle Merge Op here - materialize/execute before adding right artifact
                     if selected_op['op'] == 'merge':
                         if num_generated == num_versions - 1:
@@ -520,7 +607,9 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                 num_ops += 1
 
             # END while num_ops < ops_to_do - we have chained maximum number of ops
-            if num_ops > 0:
+            if did_sibling_split:
+                pass  # both sides already materialized by _generate_sibling_split
+            elif num_ops > 0:
                 logger.info(f"Executing current operation list: {wf.current_operation}")
                 next_label = wf.generate_next_label()
                 wf.execute_current_operation(next_label)

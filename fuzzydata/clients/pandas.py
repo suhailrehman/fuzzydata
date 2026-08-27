@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import Dict, List
 
 import pandas
 
@@ -54,7 +54,7 @@ class DataFrameArtifact(Artifact):
 
     def generate(self, num_rows, schema, rng=None):
         self.table = generate_table(num_rows, column_dict=schema, pd=self.pd, rng=rng)
-        self.schema_map = schema
+        self.schema_map = dict(schema)
         self.in_memory = True
 
     def from_df(self, df):
@@ -138,6 +138,68 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
         # repr() here, not at the call site: this string is eval()'d, so the values need to
         # be Python literals. The SQL client quotes the same raw values its own way.
         return f'.replace({{ "{col_name}": {old_value!r} }}, {new_value!r})'
+
+    # ------------------------------------------------------------------ 0.1.0 operators
+    # Column labels are addressed with x["col"] / dict literals throughout, never as
+    # attributes or identifiers: prefixes are drawn from ascii_letters+digits so a label can
+    # begin with a digit, and every string here is eval()'d.
+
+    def dropna(self, subset: List[str] = None) -> T:
+        super(DataFrameOperation, self).dropna(subset)
+        if subset:
+            return f'.dropna(subset={list(subset)})'
+        return '.dropna()'
+
+    def dedupe(self, subset: List[str] = None) -> T:
+        super(DataFrameOperation, self).dedupe(subset)
+        if subset:
+            return f'.drop_duplicates(subset={list(subset)})'
+        return '.drop_duplicates()'
+
+    def rename(self, column_map: Dict[str, str]) -> T:
+        super(DataFrameOperation, self).rename(column_map)
+        return f'.rename(columns={dict(column_map)})'
+
+    def astype(self, column: str, dtype: str) -> T:
+        super(DataFrameOperation, self).astype(column, dtype)
+        return f'.astype({{"{column}": "{dtype}"}})'
+
+    def normalize(self, column: str) -> T:
+        super(DataFrameOperation, self).normalize(column)
+        # Guard the degenerate constant-column case: max == min would divide by zero and
+        # silently fill the column with NaN.
+        return (f'.assign(**{{"{column}": lambda x: '
+                f'(x["{column}"] - x["{column}"].min()) / '
+                f'((x["{column}"].max() - x["{column}"].min()) or 1)}})')
+
+    def standardize(self, column: str) -> T:
+        super(DataFrameOperation, self).standardize(column)
+        return (f'.assign(**{{"{column}": lambda x: '
+                f'(x["{column}"] - x["{column}"].mean()) / '
+                f'(x["{column}"].std() or 1)}})')
+
+    def label_encode(self, column: str) -> T:
+        super(DataFrameOperation, self).label_encode(column)
+        # factorize() is deterministic in order of first appearance, so this replays.
+        return f'.assign(**{{"{column}": lambda x: x["{column}"].factorize()[0]}})'
+
+    def one_hot_encode(self, column: str, categories: List[str]) -> T:
+        super(DataFrameOperation, self).one_hot_encode(column, categories)
+        # Build the indicator columns from the recorded category list rather than from
+        # pd.get_dummies, so the destination schema is fixed by the spec and not by the data.
+        assigns = ', '.join(
+            f'"{self.one_hot_column_name(column, c)}": '
+            f'lambda x, _c={c!r}: (x["{column}"] == _c).astype(int)'
+            for c in categories)
+        return f'.assign(**{{{assigns}}}).drop(columns=["{column}"])'
+
+    def train_test_split(self, frac: float, random_state: int, side: str) -> T:
+        super(DataFrameOperation, self).train_test_split(frac, random_state, side)
+        train = f'.sample(frac={frac}, random_state={random_state})'
+        if side == 'train':
+            return train
+        # The complement, not a second draw: drop exactly the rows the train side took.
+        return (f'.pipe(lambda d: d.drop(index=d{train}.index))')
 
     def chain_operation(self, op, args):
         self.code += getattr(self, op)(**args)
