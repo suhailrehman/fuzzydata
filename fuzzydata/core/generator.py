@@ -666,6 +666,14 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                     try:
                         logger.info(f"Chaining Operation: {selected_op['op']}")
                         wf.chain_to_current_operation([selected_op])
+                        # Count the op BEFORE any early break. Previously the
+                        # force_materialize break jumped out with num_ops still 0, so the
+                        # "if num_ops > 0" guard below skipped materialization entirely: a
+                        # merge chosen as the first op in a chain (i.e. always, at matfreq=1)
+                        # added its synthesised right-hand table to the workflow and then
+                        # never produced the join. The corpus got an orphan parentless
+                        # artifact and lost the merge edge.
+                        num_ops += 1
                         if force_materialize:
                             break
                     except NotImplementedError as e:
@@ -686,7 +694,6 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                         logger.warning(f"Do not have any options remaining for any of the artifacts.")
                         stop_generation = True
                     break
-                num_ops += 1
 
             # END while num_ops < ops_to_do - we have chained maximum number of ops
             if did_sibling_split:

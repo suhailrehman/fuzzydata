@@ -1,0 +1,128 @@
+[
+  {
+    "config": {
+      "seed": 424242,
+      "num_versions": 12,
+      "base_shape": [
+        10,
+        400
+      ],
+      "matfreq": 1,
+      "topology": "bfactor"
+    },
+    "num_artifacts": 12,
+    "num_edges": 11,
+    "num_operations": 9,
+    "operator_histogram": {
+      "fill": 1,
+      "merge": 2,
+      "normalize": 2,
+      "one_hot_encode": 1,
+      "rename": 1,
+      "sample": 2
+    },
+    "max_depth": 5,
+    "max_out_degree": 2,
+    "artifact_labels": [
+      "artifact_0",
+      "artifact_1",
+      "artifact_2",
+      "artifact_3",
+      "artifact_4",
+      "artifact_5",
+      "artifact_6",
+      "artifact_7",
+      "artifact_8",
+      "artifact_9",
+      "artifact_10",
+      "artifact_11"
+    ]
+  },
+  {
+    "config": {
+      "seed": 424242,
+      "num_versions": 12,
+      "base_shape": [
+        10,
+        400
+      ],
+      "matfreq": 3,
+      "topology": "bfactor"
+    },
+    "num_artifacts": 12,
+    "num_edges": 11,
+    "num_operations": 11,
+    "operator_histogram": {
+      "astype": 2,
+      "dedupe": 3,
+      "dropna": 2,
+      "fill": 2,
+      "groupby": 2,
+      "label_encode": 1,
+      "one_hot_encode": 2,
+      "project": 3,
+      "rename": 1,
+      "select": 3,
+      "train_test_split": 4
+    },
+    "max_depth": 4,
+    "max_out_degree": 3,
+    "artifact_labels": [
+      "artifact_0",
+      "artifact_1",
+      "artifact_2",
+      "artifact_3",
+      "artifact_4",
+      "artifact_5",
+      "artifact_6",
+      "artifact_7",
+      "artifact_8",
+      "artifact_9",
+      "artifact_10",
+      "artifact_11"
+    ]
+  },
+  {
+    "config": {
+      "seed": 99,
+      "num_versions": 10,
+      "base_shape": [
+        8,
+        250
+      ],
+      "matfreq": 2,
+      "topology": "star"
+    },
+    "num_artifacts": 10,
+    "num_edges": 9,
+    "num_operations": 9,
+    "operator_histogram": {
+      "astype": 1,
+      "dedupe": 3,
+      "dropna": 2,
+      "fill": 1,
+      "groupby": 1,
+      "label_encode": 1,
+      "normalize": 2,
+      "project": 1,
+      "rename": 1,
+      "sample": 2,
+      "select": 1,
+      "standardize": 2
+    },
+    "max_depth": 1,
+    "max_out_degree": 9,
+    "artifact_labels": [
+      "artifact_0",
+      "artifact_1",
+      "artifact_2",
+      "artifact_3",
+      "artifact_4",
+      "artifact_5",
+      "artifact_6",
+      "artifact_7",
+      "artifact_8",
+      "artifact_9"
+    ]
+  }
+]
