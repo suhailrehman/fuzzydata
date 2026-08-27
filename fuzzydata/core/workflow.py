@@ -281,6 +281,15 @@ class Workflow(ABC):
         # Write out Lineage Graph
         nx.write_edgelist(self.graph, f"{output_dir}/{self.name}_gt_graph.csv")
 
+        # Equivalence classes over mutually-derivable artifacts. Emitted here because the
+        # operators are known symbolically at generation time; recovering invertibility from
+        # the artifacts afterwards is far harder and less reliable.
+        try:
+            from fuzzydata.lineage.equivalence import serialize_equivalence_classes
+            serialize_equivalence_classes(self, output_dir)
+        except Exception as e:  # never let a sidecar failure lose the workflow itself
+            logger.warning(f'Could not write equivalence classes: {e}')
+
         # Construct Schema Map dict and write out as json
         schema_map_dict = {label: artifact.schema_map for label, artifact in self.artifact_dict.items()}
         with open(f"{output_dir}/{self.name}_schema_map.json", 'w') as outfile:

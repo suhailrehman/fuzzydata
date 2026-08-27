@@ -324,12 +324,111 @@ class Operation(Generic[T], ABC):
         self.end_time = time.perf_counter()
         return result
 
+    #: Operations that are never invertible: information is destroyed and cannot be
+    #: reconstructed from the output alone.
+    NON_INVERTIBLE_OPS = frozenset({
+        'project',            # dropped columns are gone
+        'select', 'dropna', 'dedupe',   # dropped rows are gone
+        'sample', 'train_test_split',   # dropped rows are gone
+        'groupby',            # many rows collapse to one
+        'pivot',              # layout change plus aggregation
+        'normalize', 'standardize',     # min/max/mean/std are not recorded
+        'label_encode',       # the value -> code mapping is not recorded
+        'merge',              # the added columns have no inverse on the left input
+        # one_hot_encode is information-preserving when every row carries exactly one of
+        # the recorded categories, but nulls and unseen values are silently dropped and we
+        # do not record whether that happened. Treated as non-invertible on purpose:
+        # over-claiming invertibility merges artifacts that are not actually equivalent,
+        # which is a worse error for the quotient-aware metrics than splitting too finely.
+        'one_hot_encode',
+    })
+
+    #: Casts that lose nothing, as (from_kind, to_kind) numpy dtype kinds.
+    LOSSLESS_CASTS = frozenset({('i', 'f'), ('i', 'i'), ('f', 'f'), ('b', 'i'), ('b', 'f')})
+
+    def is_invertible_on(self, artifact=None) -> bool:
+        """Whether this operation's whole chain can be inverted on `artifact`.
+
+        A chain is invertible only if every step is. `artifact` is the input the operation
+        was applied to; some rules need its data (see fill and astype below), and if it is
+        not supplied those rules answer conservatively.
+
+        Invertibility is what defines the equivalence classes in
+        fuzzydata.lineage.equivalence: lineage is identifiable only up to mutual
+        derivability, so two artifacts joined by invertible edges are the same object for
+        the purpose of the quotient-aware metrics.
+        """
+        if not self.op_list:
+            return False
+        return all(self._step_is_invertible(entry['op'], entry['args'], artifact)
+                   for entry in self.op_list)
+
+    def is_invertible_on_input(self) -> bool:
+        """is_invertible_on() against this operation's own first source."""
+        source = self.sources[0] if self.sources else None
+        return self.is_invertible_on(source)
+
+    def _step_is_invertible(self, op: str, args: Dict, artifact) -> bool:
+        if op in self.NON_INVERTIBLE_OPS:
+            return False
+
+        if op == 'rename':
+            # Metadata only. Losslessly invertible by swapping the mapping.
+            return True
+
+        if op == 'apply':
+            # y = ax + b recovers x iff a != 0. The source column is kept alongside the
+            # derived one, so even a == 0 loses nothing -- but the derived column itself is
+            # then constant, and the operation is not information-adding. Follow the spec.
+            return args.get('a', 0) != 0
+
+        if op == 'astype':
+            return self._cast_is_lossless(args.get('column'), args.get('dtype'), artifact)
+
+        if op == 'fill':
+            return self._fill_is_invertible(args, artifact)
+
+        # Unknown operator: assume not invertible rather than silently claiming equivalence.
+        logger.warning(f'No invertibility rule for operation {op!r}; assuming not '
+                       f'invertible. Add it to Operation._step_is_invertible.')
+        return False
+
+    def _cast_is_lossless(self, column, dtype, artifact) -> bool:
+        """A cast is invertible only if it widens. int -> float round-trips; float -> int
+        truncates; anything involving text is lossy."""
+        if artifact is None or column is None:
+            return False
+        try:
+            import numpy as np
+            source_kind = np.dtype(artifact.to_df()[column].dtype).kind
+            target_kind = np.dtype(dtype).kind
+        except (KeyError, TypeError, ValueError, AttributeError):
+            return False
+        return (source_kind, target_kind) in self.LOSSLESS_CASTS
+
+    def _fill_is_invertible(self, args, artifact) -> bool:
+        """fill is invertible iff the replacement value did NOT already occur in the column.
+
+        If it did, the output has two indistinguishable populations -- rows that always held
+        new_value and rows that were changed to it -- and the original cannot be recovered.
+        The spec says to compute this rather than guess, so it is computed.
+        """
+        if artifact is None:
+            return False
+        column, new_value = args.get('col_name'), args.get('new_value')
+        try:
+            series = artifact.to_df()[column]
+        except (KeyError, TypeError, AttributeError):
+            return False
+        return not bool((series == new_value).any())
+
     def get_execution_time(self):
         """ Get the execution time for this operation"""
         return self.end_time - self.start_time
 
     def to_dict(self) -> dict:
         """ Return a dictionary representation of this operation"""
+        from fuzzydata.lineage.annotations import annotate_edge
         record = {
             'sources': [s.label for s in self.sources],
             'new_label': self.new_label,
@@ -337,6 +436,9 @@ class Operation(Generic[T], ABC):
         }
         if self.sibling_group is not None:
             record['sibling_group'] = self.sibling_group
+        # Per-edge provenance metadata. Free to emit here and effectively unrecoverable once
+        # the artifacts are on disk. See fuzzydata.lineage.annotations.
+        record['annotation'] = annotate_edge(self)
         return record
 
     def __str__(self):
