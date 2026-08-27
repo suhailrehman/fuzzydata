@@ -40,15 +40,17 @@ setup(
         'faker>=13.3.0',
         'pandas>=1.4.0',
         'networkx>=2.7',
-        'SQLAlchemy>=2.0.0',
         # parquet is the recommended artifact format for corpus generation: csv round-trips
         # every value through text, so dtypes survive only by inference.
         'pyarrow>=10.0.0',
     ],
     extras_require={
+        # pip install fuzzydata[sql]  -- enables the SQLite/SQLAlchemy client
+        'sql': ['SQLAlchemy>=2.0.0'],
         # The modin client is DEPRECATED as of 0.1.0 and is not covered by CI. It still
         # ships and still works; see fuzzydata/clients/modin.py.
         'modin': ['modin[all]>=0.13.2'],
+        'all': ['SQLAlchemy>=2.0.0', 'modin[all]>=0.13.2'],
         'dev': ['pytest', 'pytest-cov', 'pytest-dependency'],
     }
 )
