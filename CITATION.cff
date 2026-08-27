@@ -1,0 +1,54 @@
+cff-version: 1.2.0
+title: fuzzydata
+message: >-
+  If you use this software, please cite the DBTest '22 paper listed under
+  preferred-citation.
+type: software
+authors:
+  - family-names: Rehman
+    given-names: Mohammed Suhail
+  - family-names: Elmore
+    given-names: Aaron
+repository-code: 'https://github.com/suhailrehman/fuzzydata'
+url: 'https://github.com/suhailrehman/fuzzydata'
+license: MIT
+version: 0.1.0
+abstract: >-
+  A scalable workload generator for testing dataframe workflow systems. Generates
+  randomized data-transformation workflows with ground-truth lineage, per-edge
+  provenance annotations and equivalence classes over mutually-derivable artifacts,
+  for benchmarking dataframe systems and for building data-lineage inference corpora.
+keywords:
+  - data lineage
+  - provenance
+  - dataframes
+  - benchmarking
+  - synthetic data
+preferred-citation:
+  type: conference-paper
+  title: >-
+    FuzzyData: A Scalable Workload Generator for Testing Dataframe Workflow Systems
+  authors:
+    - family-names: Rehman
+      given-names: Mohammed Suhail
+    - family-names: Elmore
+      given-names: Aaron
+  year: 2022
+  month: 6
+  collection-title: >-
+    Proceedings of the 2022 Workshop on 9th International Workshop of Testing
+    Database Systems
+  collection-type: proceedings
+  series: DBTest '22
+  publisher:
+    name: Association for Computing Machinery
+  conference:
+    name: DBTest '22
+    city: Philadelphia
+    region: PA
+    country: US
+  start: 17
+  end: 24
+  isbn: '9781450393539'
+  doi: 10.1145/3531348.3532178
+  url: 'https://doi.org/10.1145/3531348.3532178'

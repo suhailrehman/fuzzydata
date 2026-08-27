@@ -45,7 +45,7 @@ def _ids(cases):
 
 
 @pytest.mark.parametrize('artifact, op_dict',
-                         itertools.product(static_artifact_fixtures, NEW_OPERATORS),
+                         list(itertools.product(static_artifact_fixtures, NEW_OPERATORS)),
                          ids=lambda v: v if isinstance(v, str) else
                          f"{v['op']}{'-' + v['args']['side'] if 'side' in v['args'] else ''}")
 def test_new_operator_executes(artifact, request, op_dict):

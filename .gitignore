@@ -141,3 +141,8 @@ dask-worker-space/
 
 # JetBrains IDE
 .idea/
+
+# Build artifacts
+/dist/
+/build/
+*.egg-info/

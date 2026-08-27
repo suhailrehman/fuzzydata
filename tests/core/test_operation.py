@@ -63,7 +63,7 @@ _merge_operation = {
     'args': {'key_col': 'a0UaD__zipcode_in_state'}
 }
 
-@pytest.mark.parametrize('artifact, op_dict', itertools.product(static_artifact_fixtures, _operations))
+@pytest.mark.parametrize('artifact, op_dict', list(itertools.product(static_artifact_fixtures, _operations)))
 def test_single_operations(artifact, request, op_dict):
     concrete_artifact = request.getfixturevalue(artifact)
     op, args = op_dict['op'], op_dict['args']

@@ -1,1 +1,15 @@
 include fuzzydata/core/config/*.txt
+
+# Documentation shipped with the sdist so the corpus guide travels with the code.
+include README.md
+include CHANGELOG.md
+include LICENSE
+include CITATION.cff
+recursive-include docs *.md
+
+include pytest.ini
+recursive-include scripts *
+
+# Test fixtures: the characterization baseline and the real seed table are needed to run the
+# suite from an installed sdist, which is exactly what the release dry run does.
+recursive-include tests/fixtures *
