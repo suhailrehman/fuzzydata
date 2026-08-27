@@ -438,14 +438,15 @@ class Workflow(ABC):
 
     #: Parent-selection strategies for workflow generation. See docs/topology.md for the
     #: measured shape each one produces.
-    TOPOLOGIES = ('chain', 'star', 'balanced', 'random_recursive', 'bfactor')
+    TOPOLOGIES = ('chain', 'star', 'balanced', 'random_recursive', 'bfactor', 'fitted')
 
     #: Branching factor used by topology='balanced'. 2 gives a balanced binary tree, so
     #: depth grows as log2(n) while out-degree stays capped.
     BALANCED_BRANCHING_FACTOR = 2
 
     def select_random_artifact(self, bfactor=1.0, exclude: List[str] = None, rng=None,
-                               topology: str = 'bfactor') -> Artifact:
+                               topology: str = 'bfactor', target_depth: int = None,
+                               target_branching: float = None) -> Artifact:
         """
         Select the parent artifact for the next operation.
         :param bfactor: Branching factor, used only by topology='bfactor'. Weights artifact i
@@ -457,6 +458,8 @@ class Workflow(ABC):
         :param topology: one of TOPOLOGIES. 'bfactor' preserves the historical behaviour.
             The others select deterministically, which is what makes a named shape
             generatable at all -- exponential weighting cannot produce a true star.
+        :param target_depth: Used by topology='fitted'. Target DAG depth to reach.
+        :param target_branching: Used by topology='fitted'. Target average out-degree.
         :return: Chosen artifact
         """
         from fuzzydata.core.generator import coerce_rng
@@ -493,6 +496,40 @@ class Workflow(ABC):
         if topology == 'random_recursive':
             # Uniform over all existing artifacts -> a random recursive tree.
             return viable_artifacts[labels[int(rng.integers(0, len(labels)))]]
+
+        if topology == 'fitted':
+            # Weight artifacts to steer toward target_depth and target_branching.
+            # Phase 1 (remaining_depth > 0): prefer artifacts with room to grow deeper.
+            # Phase 2 (target reached): prefer artifacts with spare branching capacity.
+            # Fallback: uniform selection when all weights collapse to zero.
+            # Compute each artifact's depth as 1 + max(predecessor depths).
+            depths = {}
+            for label in labels:
+                preds = list(self.graph.predecessors(label))
+                if not preds:
+                    depths[label] = 0
+                else:
+                    depths[label] = 1 + max(depths.get(p, 0) for p in preds)
+
+            current_max_depth = max(depths.values()) if depths else 0
+            td = target_depth if target_depth is not None else current_max_depth + 1
+            tb = target_branching if target_branching is not None else 1.0
+
+            remaining = td - current_max_depth
+            if remaining > 0:
+                # Prefer deepest artifacts (they can keep extending the longest path)
+                weights = np.array([float(depths[l]) + 1.0 for l in labels])
+            else:
+                # Prefer artifacts with spare branching capacity
+                weights = np.array([max(0.0, tb - self.graph.out_degree(l)) for l in labels])
+
+            total = weights.sum()
+            if total == 0:
+                # Fallback: uniform
+                weights = np.ones(len(labels))
+                total = float(len(labels))
+            prob = weights / total
+            return viable_artifacts[labels[int(rng.choice(len(labels), p=prob))]]
 
         # topology == 'bfactor': exponential weighting over insertion order.
         # The historical leading constant bfactor/(exp(bfactor*size)-1) is cancelled by the

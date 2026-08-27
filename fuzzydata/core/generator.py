@@ -581,7 +581,7 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                       exclude_ops=None, seed=None, topology='bfactor', base_artifact=None,
                       validate='warn', file_format='csv',
                       operator_policy='schema_constrained', idiom=None,
-                      invertible_bias: float = 0.0):
+                      invertible_bias: float = 0.0, topology_params=None):
     """
     Generate a workflow for a given client and parameters
     :param workflow_class: Workflow class to be used (DataFrameWorkflow, ModinWorkflow, or SQLWorkflow)
@@ -617,12 +617,44 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
         'warn' (default) logs a summary, 'strict' raises DegenerateArtifactError, 'off'
         skips it. See fuzzydata.lineage.validity.
     :param topology: parent-selection strategy, one of Workflow.TOPOLOGIES
-        ('chain'|'star'|'balanced'|'random_recursive'|'bfactor'). Default 'bfactor' keeps the
-        historical exponential weighting, in which case `bfactor` applies.
+        ('chain'|'star'|'balanced'|'random_recursive'|'bfactor'|'fitted'). Default 'bfactor'
+        keeps the historical exponential weighting, in which case `bfactor` applies.
+        'fitted' uses empirical distributions from topology_params to steer depth and branching.
+    :param topology_params: for topology='fitted', either a path to a JSON file or a dict with
+        'depth', 'branching_factor', and optionally 'num_artifacts' empirical distributions.
+        Each distribution has 'values' and 'weights' lists.  Ignored for other topologies.
     :return: Workflow object of desired type.
     """
     wf_options = wf_options or {}
     rng = coerce_rng(seed)
+
+    # Parse topology_params and draw target depth/branching for 'fitted' topology.
+    fitted_target_depth = None
+    fitted_target_branching = None
+    if topology == 'fitted' and topology_params is not None:
+        import json as _json
+        if isinstance(topology_params, str):
+            with open(topology_params) as _f:
+                topology_params = _json.load(_f)
+        if 'depth' in topology_params:
+            _d = topology_params['depth']
+            _vals = _d['values']
+            _w = _d['weights']
+            _prob = [w / sum(_w) for w in _w]
+            fitted_target_depth = int(_vals[int(rng.choice(len(_vals), p=_prob))])
+        if 'branching_factor' in topology_params:
+            _b = topology_params['branching_factor']
+            _vals = _b['values']
+            _w = _b['weights']
+            _prob = [w / sum(_w) for w in _w]
+            fitted_target_branching = float(_vals[int(rng.choice(len(_vals), p=_prob))])
+        if 'num_artifacts' in topology_params:
+            _na = topology_params['num_artifacts']
+            _vals = _na['values']
+            _w = _na['weights']
+            _prob = [w / sum(_w) for w in _w]
+            num_versions = int(_vals[int(rng.choice(len(_vals), p=_prob))])
+            logger.info(f'fitted topology overrides num_versions -> {num_versions}')
 
     if operator_policy not in ('schema_constrained', 'idiom'):
         raise ValueError(f'Unknown operator_policy {operator_policy!r}; expected '
@@ -658,7 +690,9 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
     while num_generated < num_versions:
         try:
             source_artifact = wf.select_random_artifact(bfactor=bfactor, exclude=artifact_exclusions,
-                                                        rng=rng, topology=topology)
+                                                        rng=rng, topology=topology,
+                                                        target_depth=fitted_target_depth,
+                                                        target_branching=fitted_target_branching)
             num_ops = 0
             ops_to_do = matfreq  #TODO: Randomize or coin flip here
             force_materialize = False
@@ -833,6 +867,9 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
         'file_format': file_format,
         'base_artifact': str(base_artifact) if base_artifact else None,
         'invertible_bias': invertible_bias,
+        'topology_params': topology_params if isinstance(topology_params, dict) else None,
+        'fitted_target_depth': fitted_target_depth,
+        'fitted_target_branching': fitted_target_branching,
     }
 
     wf.serialize_workflow()

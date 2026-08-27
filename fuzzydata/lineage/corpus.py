@@ -57,7 +57,7 @@ def _build_environment() -> Dict:
 
 #: Grid dimensions expanded by expand_grid(), in a fixed order so the expansion is stable.
 GRID_KEYS = ('num_versions', 'matfreq', 'topology', 'operator_policy', 'bfactor',
-             'invertible_bias')
+             'invertible_bias', 'topology_params')
 
 DEFAULT_GRID = {
     'num_versions': [10],
@@ -66,6 +66,7 @@ DEFAULT_GRID = {
     'operator_policy': ['schema_constrained', 'idiom'],
     'bfactor': [1.0],
     'invertible_bias': [0.0],
+    'topology_params': [None],
 }
 
 
@@ -239,6 +240,7 @@ def _generate_one(job: Dict) -> Dict:
             base_artifact=spec['base_artifact'],
             file_format=spec['file_format'],
             invertible_bias=spec.get('invertible_bias', 0.0),
+            topology_params=spec.get('topology_params'),
             validate='off',   # summarised into the manifest instead of logged per workflow
         )
     except Exception as e:
