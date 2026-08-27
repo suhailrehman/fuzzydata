@@ -24,11 +24,14 @@ NUM_VERSIONS = 8
 
 
 def _content_hash(df: pd.DataFrame) -> str:
-    """Order-insensitive content digest: sort columns, then sort rows by their string form."""
+    """Order-insensitive content digest: sort columns, then sort rows by their string form.
+
+    Uses pd.util.hash_pandas_object over sorted columns so missing values are handled
+    uniformly across pandas 2.x and 3.x (astype(str) changed NA semantics in 3.0).
+    """
     ordered = df.reindex(sorted(df.columns), axis=1)
-    as_text = ordered.astype(str)
-    rows = sorted('\x1f'.join(r) for r in as_text.itertuples(index=False, name=None))
-    return hashlib.sha256('\x1e'.join(rows).encode()).hexdigest()
+    row_hashes = sorted(pd.util.hash_pandas_object(ordered, index=False).astype(str))
+    return hashlib.sha256('\x1e'.join(row_hashes).encode()).hexdigest()
 
 
 def _generate(tmp_path, seed, name='det', **kwargs):
