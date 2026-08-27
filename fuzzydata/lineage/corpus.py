@@ -187,6 +187,16 @@ def _generate_one(job: Dict) -> Dict:
         category = op_category(op)
         categories[category] = categories.get(category, 0) + count
 
+    seed_descriptor = None
+    if spec.get('base_artifact'):
+        try:
+            from fuzzydata.core.generator import load_seed_table
+            from fuzzydata.lineage.profiler import describe_table
+            seed_df = load_seed_table(spec['base_artifact'])
+            seed_descriptor = describe_table(seed_df)
+        except Exception as e:
+            logger.warning(f'Could not describe seed table {spec["base_artifact"]}: {e}')
+
     row.update({
         'status': 'ok',
         'idiom': (workflow.metadata or {}).get('idiom'),
@@ -196,6 +206,8 @@ def _generate_one(job: Dict) -> Dict:
         'category_histogram': dict(sorted(categories.items())),
         'validity': workflow_validity_summary(workflow),
     })
+    if seed_descriptor is not None:
+        row['seed_descriptor'] = seed_descriptor
     return row
 
 

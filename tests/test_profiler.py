@@ -8,8 +8,9 @@ import pytest
 
 from fuzzydata.clients.pandas import DataFrameWorkflow
 from fuzzydata.core.generator import generate_workflow, load_seed_table
-from fuzzydata.lineage.profiler import (InsufficientSchemaError, infer_column_types,
-                                        infer_schema_map, validate_schema_map)
+from fuzzydata.lineage.profiler import (InsufficientSchemaError, describe_table,
+                                        infer_column_types, infer_schema_map,
+                                        validate_schema_map)
 
 logger = logging.getLogger(__name__)
 
@@ -112,3 +113,51 @@ def test_real_seed_generation_is_reproducible(tmp_path):
                                base_artifact=SEED_CSV)
         return [o['op'] for op in wf.operation_list for o in op['op_list']]
     assert ops(tmp_path / 'a') == ops(tmp_path / 'b')
+
+
+# ---- describe_table tests (issue #19) -----------------------------------------------
+
+def test_describe_table_buckets():
+    """Hand-built frames land in the expected row_bucket, col_bucket, and type_mix."""
+    # Small numeric-dominant table: use float values so no column is misclassified as joinable
+    rng = np.random.default_rng(0)
+    small_num = pd.DataFrame({f'n{i}': rng.standard_normal(500) for i in range(6)})
+    d = describe_table(small_num)
+    assert d['n_rows'] == 500
+    assert d['n_cols'] == 6
+    assert d['row_bucket'] == '1e2'
+    assert d['col_bucket'] == '<10'
+    assert d['type_mix'] == 'numeric-dominant'
+    assert d['admits_generation'] is True
+
+    # Medium categorical-dominant table (low-cardinality strings = groupable)
+    n = 10_000
+    med_cat = pd.DataFrame({
+        'cat1': (['a', 'b'] * (n // 2))[:n],
+        'cat2': (['x', 'y', 'z'] * (n // 3 + 1))[:n],
+        'cat3': (['p', 'q'] * (n // 2))[:n],
+    })
+    d2 = describe_table(med_cat)
+    assert d2['row_bucket'] == '1e4'
+
+    # Wide table
+    wide = pd.DataFrame({f'c{i}': range(50) for i in range(60)})
+    assert describe_table(wide)['col_bucket'] == '>50'
+
+    # 10–50 col bucket
+    mid = pd.DataFrame({f'c{i}': range(50) for i in range(25)})
+    assert describe_table(mid)['col_bucket'] == '10-50'
+
+    # Large table row bucket
+    large = pd.DataFrame({'a': range(200_000), 'b': [1.0] * 200_000})
+    assert describe_table(large)['row_bucket'] == '1e6'
+
+
+def test_describe_table_flags_insufficient():
+    """A table with no legal operations reports admits_generation=False without raising."""
+    # One text-only column: no numeric column → InsufficientSchemaError internally
+    df = pd.DataFrame({'name': ['alice', 'bob', 'carol'] * 10})
+    d = describe_table(df)
+    assert d['admits_generation'] is False
+    # Must not raise
+    assert isinstance(d, dict)

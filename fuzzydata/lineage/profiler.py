@@ -137,6 +137,71 @@ def infer_column_types(df: pd.DataFrame) -> Dict[str, List[str]]:
     return {str(name): infer_column_labels(name, df[name]) for name in df.columns}
 
 
+def describe_table(df: pd.DataFrame) -> dict:
+    """Table-level descriptor for seed stratification.
+
+    Returns a dict with coarse-grained shape buckets and a type-mix label so a corpus
+    consumer can stratify its seed pool without re-profiling every table from scratch.
+
+    :param df: the table to describe.
+    :return: dict with keys n_rows, n_cols, row_bucket, col_bucket, type_mix,
+        admits_generation.
+    """
+    n_rows = len(df)
+    n_cols = len(df.columns)
+
+    if n_rows < 1_000:
+        row_bucket = '1e2'
+    elif n_rows < 100_000:
+        row_bucket = '1e4'
+    else:
+        row_bucket = '1e6'
+
+    if n_cols < 10:
+        col_bucket = '<10'
+    elif n_cols <= 50:
+        col_bucket = '10-50'
+    else:
+        col_bucket = '>50'
+
+    col_types = infer_column_types(df)
+    numeric_count = sum(1 for labels in col_types.values() if 'numeric' in labels)
+    categorical_count = sum(
+        1 for labels in col_types.values()
+        if 'groupable' in labels or 'joinable' in labels
+    )
+    # 'string' only: columns whose sole label is string (no numeric/groupable/joinable)
+    string_only_count = sum(
+        1 for labels in col_types.values()
+        if labels == ['string']
+    )
+    total = max(n_cols, 1)
+    if numeric_count / total > 0.5:
+        type_mix = 'numeric-dominant'
+    elif categorical_count / total > 0.5:
+        type_mix = 'categorical-dominant'
+    elif string_only_count / total > 0.5:
+        type_mix = 'text-heavy'
+    else:
+        type_mix = 'mixed'
+
+    try:
+        schema_map = infer_schema_map(df)
+        validate_schema_map(schema_map, df)
+        admits_generation = True
+    except InsufficientSchemaError:
+        admits_generation = False
+
+    return {
+        'n_rows': n_rows,
+        'n_cols': n_cols,
+        'row_bucket': row_bucket,
+        'col_bucket': col_bucket,
+        'type_mix': type_mix,
+        'admits_generation': admits_generation,
+    }
+
+
 def validate_schema_map(schema_map: Dict[str, str], df: pd.DataFrame = None) -> None:
     """Fail fast if a profiled table cannot support any operation.
 
