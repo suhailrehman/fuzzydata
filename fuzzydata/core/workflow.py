@@ -93,6 +93,45 @@ class Workflow(ABC):
                     'code': operation.code,
                 })
 
+    def load_base_artifact(self, df, label: str = None) -> Artifact:
+        """Seed the workflow from a real table instead of generating one with Faker.
+
+        The schema map is profiled from the data (see fuzzydata.lineage.profiler), because a
+        real table has no Faker providers to look up.
+
+        :param df: the real table to use as the base artifact.
+        :param label: (optional) custom label for the artifact.
+        :return: the base Artifact.
+        """
+        from fuzzydata.lineage.profiler import infer_schema_map, validate_schema_map
+
+        schema_map = infer_schema_map(df)
+        validate_schema_map(schema_map, df)
+
+        if not label:
+            label = self.generate_next_label()
+        start_time = time.perf_counter()
+        new_artifact = self.initialize_new_artifact(
+            label=label, filename=f"{self.artifact_dir}/{label}.csv", schema_map=schema_map)
+        new_artifact.from_df(df)
+        new_artifact.schema_map = schema_map
+        end_time = time.perf_counter()
+        self.add_artifact(new_artifact)
+
+        self.perf_records.append(pd.Series({
+            'src': np.nan,
+            'dst': label,
+            'op': 'load',
+            'args': np.nan,
+            'start_time': start_time,
+            'end_time': end_time,
+            'elapsed_time': end_time - start_time
+        }).to_frame().T)
+
+        logger.info(f'Loaded base artifact {label} from a real table: '
+                    f'{len(df.index)} rows x {len(df.columns)} columns')
+        return new_artifact
+
     def generate_base_artifact(self, num_rows=100, num_cols=10, column_maps=None, label: str = None,
                                rng=None) -> Artifact:
         """

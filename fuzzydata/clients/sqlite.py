@@ -195,10 +195,14 @@ class SQLOperation(Operation['SQLArtifact']):
         super(SQLOperation, self).materialize(new_label)
         logger.debug(f'Executing SQL code: {self.code}')
         self.code = f'CREATE VIEW `{self.new_label}` AS {self.code}'
-        return self.artifact_class(label=self.new_label,
-                                   sql_engine=self.sources[0].sql_engine,
-                                   from_sql=self.code,
-                                   schema_map=self.current_schema_map)
+        artifact = self.artifact_class(label=self.new_label,
+                                       sql_engine=self.sources[0].sql_engine,
+                                       from_sql=self.code,
+                                       schema_map=self.current_schema_map)
+        # The view has to exist before it can be profiled, so resolve after construction.
+        if not self.current_schema_map:
+            artifact.schema_map = self.resolve_schema_map(artifact.to_df())
+        return artifact
 
 
 class SQLWorkflow(Workflow):

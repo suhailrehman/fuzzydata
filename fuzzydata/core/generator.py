@@ -14,6 +14,8 @@ import pandas as pd
 from faker import Faker
 from itertools import chain
 
+from fuzzydata.lineage.profiler import PROFILED_PREFIX, is_profiled_provider
+
 
 logging.getLogger('faker').setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -146,8 +148,14 @@ def generate_schema(num_cols: int, unique_prefix: Callable = None,
 def get_schema_type_mapping(column_dict):
     # Do not need inverse schema maps yet...
     schema_type_mapping = defaultdict(list)
-    for col, faker_type in column_dict.items():
-        for col_type in _inv_gen_functions[faker_type]:
+    for col, faker_type in (column_dict or {}).items():
+        if is_profiled_provider(faker_type):
+            # Columns profiled from a real seed table carry a sentinel provider naming their
+            # label directly, since a real table has no Faker provider to look up.
+            col_types = [faker_type[len(PROFILED_PREFIX):]]
+        else:
+            col_types = _inv_gen_functions[faker_type]
+        for col_type in col_types:
             schema_type_mapping[col_type].append(col)
 
     logger.debug(f'Inverse ColumnType Mapping: {schema_type_mapping}')
@@ -230,6 +238,21 @@ def _numeric_series(source_df, col):
     except (TypeError, ValueError):
         return None
     return series if len(series) else None
+
+
+def load_seed_table(path) -> pandas.DataFrame:
+    """Read a real seed table from disk. Supports .csv and .parquet.
+    :param path: path to the seed table.
+    :return: DataFrame
+    """
+    path = str(path)
+    suffix = os.path.splitext(path)[1].lower()
+    if suffix in ('.parquet', '.pq'):
+        return pd.read_parquet(path)
+    if suffix in ('.csv', '.txt', ''):
+        return pd.read_csv(path)
+    raise ValueError(f'Unsupported seed table format {suffix!r} for {path}; '
+                     f'expected .csv or .parquet')
 
 
 def generate_ops_choices(schema: Dict[str, str], num_rows: int,
@@ -325,12 +348,21 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
                 present = source_df[fill_col].dropna()
                 if len(present):
                     old_value = _py_scalar(present.iloc[int(rng.integers(0, len(present)))])
-                    faker = Faker()
-                    faker.seed_instance(draw_seed(rng))
-                    try:
-                        new_value = faker.format(schema[fill_col])
-                    except (AttributeError, TypeError):
-                        new_value = old_value
+                    provider = schema[fill_col]
+                    if is_profiled_provider(provider):
+                        # Real seed tables have no Faker provider. Draw a different existing
+                        # value so fill stays a genuine substitution rather than a no-op.
+                        distinct = present[present != old_value]
+                        new_value = _py_scalar(
+                            distinct.iloc[int(rng.integers(0, len(distinct)))]
+                        ) if len(distinct) else old_value
+                    else:
+                        faker = Faker()
+                        faker.seed_instance(draw_seed(rng))
+                        try:
+                            new_value = faker.format(provider)
+                        except (AttributeError, TypeError):
+                            new_value = old_value
                     ops_choices.append({'op': 'fill',
                                         'args': {'col_name': fill_col,
                                                  'old_value': old_value,
@@ -359,7 +391,7 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
 
 def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10, 1000),
                       out_directory='/tmp/dataset', bfactor=1.0, matfreq=1, wf_options=None,
-                      exclude_ops=None, seed=None, topology='bfactor'):
+                      exclude_ops=None, seed=None, topology='bfactor', base_artifact=None):
     """
     Generate a workflow for a given client and parameters
     :param workflow_class: Workflow class to be used (DataFrameWorkflow, ModinWorkflow, or SQLWorkflow)
@@ -375,6 +407,12 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
         selection, operator choice, argument sampling and Faker, so the same seed reproduces
         the same graph, the same operations and the same artifact contents. Left as None,
         generation is nondeterministic as before.
+    :param base_artifact: path to a real seed table (.csv or .parquet) to use as the base
+        artifact instead of generating one with Faker. Its schema map is profiled from the
+        data. When given, `base_shape` is ignored (a warning is logged, not an error).
+        Faker base artifacts have no inter-column correlation, no functional dependencies and
+        no semantic column names, so a corpus built only from them teaches an encoder
+        features that will not transfer to real tables.
     :param topology: parent-selection strategy, one of Workflow.TOPOLOGIES
         ('chain'|'star'|'balanced'|'random_recursive'|'bfactor'). Default 'bfactor' keeps the
         historical exponential weighting, in which case `bfactor` applies.
@@ -392,7 +430,13 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
     # Ops this client cannot express at all, excluded up front rather than raising mid-run.
     user_exclude_ops |= set(wf.operator_class.unsupported_ops)
 
-    wf.generate_base_artifact(num_cols=base_shape[0], num_rows=base_shape[1], rng=rng)
+    if base_artifact is not None:
+        if base_shape != (10, 1000):
+            logger.warning(f'base_shape={base_shape} is ignored when base_artifact is given; '
+                           f'the seed table determines the base shape.')
+        wf.load_base_artifact(load_seed_table(base_artifact))
+    else:
+        wf.generate_base_artifact(num_cols=base_shape[0], num_rows=base_shape[1], rng=rng)
 
     num_generated = len(wf.artifact_list)
     artifact_exclusions = []

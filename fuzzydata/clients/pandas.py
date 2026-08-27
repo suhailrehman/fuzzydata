@@ -11,6 +11,27 @@ from fuzzydata.core.workflow import Workflow
 logger = logging.getLogger(__name__)
 
 
+#: Emitted into the exported script as well, so generated code stands alone.
+FLATTEN_PIVOT_SRC = '''
+def _flatten_pivot(df):
+    """Flatten a pivot_table result to single-level, string-named columns.
+
+    pivot_table with index/columns/values returns a MultiIndex on the columns. Such a frame
+    cannot survive a CSV round-trip and no downstream operator can address its columns, so
+    every pivot artifact was a dead end. Joining the levels keeps the value column and the
+    pivoted key visible in the name.
+    """
+    df = df.reset_index()
+    if hasattr(df.columns, "nlevels") and df.columns.nlevels > 1:
+        df.columns = ["__".join(str(p) for p in tup if str(p) != "") for tup in df.columns]
+    else:
+        df.columns = [str(c) for c in df.columns]
+    return df
+'''
+
+exec(FLATTEN_PIVOT_SRC)
+
+
 class DataFrameArtifact(Artifact):
 
     def __init__(self, *args, **kwargs):
@@ -109,7 +130,8 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
 
     def pivot(self, index_cols: List[str], columns: List[str], value_col: List[str], agg_func: str) -> T:
         super(DataFrameOperation, self).pivot(index_cols, columns, value_col, agg_func)
-        return f'.pivot_table(index={index_cols}, columns={columns},values={value_col},aggfunc="{agg_func}")'
+        return (f'.pivot_table(index={index_cols}, columns={columns},values={value_col},'
+                f'aggfunc="{agg_func}").pipe(_flatten_pivot)')
 
     def fill(self, col_name: str, old_value, new_value):
         super(DataFrameOperation, self).fill(col_name, old_value, new_value)
@@ -126,7 +148,7 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
         super(DataFrameOperation, self).materialize(new_label)
         return self.artifact_class(label=self.new_label,
                                    from_df=new_df,
-                                   schema_map=self.current_schema_map)
+                                   schema_map=self.resolve_schema_map(new_df))
     
     @property
     def export_code(self):
@@ -141,7 +163,7 @@ class DataFrameWorkflow(Workflow):
         super(DataFrameWorkflow, self).__init__(*args, **kwargs)
         self.artifact_class = DataFrameArtifact
         self.operator_class = DataFrameOperation
-        self.wf_code_export = "import pandas as pd\n"
+        self.wf_code_export = "import pandas as pd\n" + FLATTEN_PIVOT_SRC + "\n"
 
     def initialize_new_artifact(self, label=None, filename=None, schema_map=None):
         return DataFrameArtifact(label, filename=filename, schema_map=schema_map)

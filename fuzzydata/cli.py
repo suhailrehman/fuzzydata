@@ -81,6 +81,12 @@ def setup_arguments(args):
                         help="Materialization frequency, i.e. how many operations before writing out an artifact",
                         type=int, default=1)
 
+    parser.add_argument("--base_artifact",
+                        help="Path to a real seed table (.csv or .parquet) to use as the base "
+                             "artifact instead of generating one with Faker. Its schema is "
+                             "profiled from the data. --columns/--rows are ignored.",
+                        type=str, default=None)
+
     parser.add_argument("--seed",
                         help="Integer seed for reproducible generation. The same seed yields "
                              "the same graph, operations and artifact contents. Omit for "
@@ -178,7 +184,8 @@ def main(args):
                                      out_directory=options.output_dir, bfactor=options.bfactor,
                                      wf_options=wf_options,
                                      exclude_ops=exclude_ops, matfreq=options.matfreq,
-                                     seed=options.seed, topology=options.topology)
+                                     seed=options.seed, topology=options.topology,
+                                     base_artifact=options.base_artifact)
 
         # Generate Workflow calls serialize at the end.
 

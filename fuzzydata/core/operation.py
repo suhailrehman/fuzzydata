@@ -54,6 +54,25 @@ class Operation(Generic[T], ABC):
         """Add a source artifact to this operation. """
         self.sources.append(s_artifact)
 
+    def resolve_schema_map(self, materialized_df) -> Dict[str, str]:
+        """Schema map to record on the artifact this operation produced.
+
+        pivot() deliberately blanks current_schema_map because the destination columns are
+        data-dependent and only known once the operation runs. Nothing used to refill it, so
+        every post-pivot artifact was recorded with an empty schema -- which made it a
+        permanent dead end for further generation and left a hole in the ground truth the
+        corpus depends on. Profile the actual result instead.
+        """
+        if self.current_schema_map:
+            return self.current_schema_map
+        from fuzzydata.lineage.profiler import infer_schema_map
+        if materialized_df is None:
+            return {}
+        resolved = infer_schema_map(materialized_df)
+        logger.debug(f'Recovered schema map for {self.new_label} by profiling: {resolved}')
+        self.current_schema_map = resolved
+        return resolved
+
     @staticmethod
     def apply_column_name(numeric_col: str, a, b) -> str:
         """Name of the column that apply() derives. Defined once here because the ABC's
