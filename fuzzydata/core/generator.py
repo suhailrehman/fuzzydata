@@ -520,6 +520,45 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
     return ops_choices
 
 
+def _predict_invertible(op: str, args: dict, artifact) -> bool:
+    """Predict whether a single op+args pair would be invertible on `artifact`.
+
+    Mirrors Operation._step_is_invertible without requiring a materialised Operation object,
+    so it can be used at operator-selection time to weight ops_choices for invertible_bias.
+    """
+    _non_invertible = frozenset({
+        'project', 'select', 'dropna', 'dedupe', 'sample', 'train_test_split',
+        'groupby', 'pivot', 'normalize', 'standardize', 'label_encode', 'merge',
+        'one_hot_encode',
+    })
+    if op in _non_invertible:
+        return False
+    if op in ('rename', 'sort', 'shuffle'):
+        return True
+    if op == 'apply':
+        return args.get('a', 0) != 0
+    if op == 'astype':
+        if artifact is None:
+            return False
+        try:
+            import numpy as np
+            source_kind = np.dtype(artifact.to_df()[args['column']].dtype).kind
+            target_kind = np.dtype(args['dtype']).kind
+            return (source_kind, target_kind) in {('i', 'f'), ('i', 'i'), ('f', 'f'),
+                                                  ('b', 'i'), ('b', 'f')}
+        except Exception:
+            return False
+    if op == 'fill':
+        if artifact is None:
+            return False
+        try:
+            series = artifact.to_df()[args['col_name']]
+            return not bool((series == args.get('new_value')).any())
+        except Exception:
+            return False
+    return False
+
+
 def _generate_sibling_split(wf, source_artifact, args, rng):
     """Materialize both sides of a train/test split as sibling operations.
 
@@ -541,7 +580,8 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                       out_directory='/tmp/dataset', bfactor=1.0, matfreq=1, wf_options=None,
                       exclude_ops=None, seed=None, topology='bfactor', base_artifact=None,
                       validate='warn', file_format='csv',
-                      operator_policy='schema_constrained', idiom=None):
+                      operator_policy='schema_constrained', idiom=None,
+                      invertible_bias: float = 0.0):
     """
     Generate a workflow for a given client and parameters
     :param workflow_class: Workflow class to be used (DataFrameWorkflow, ModinWorkflow, or SQLWorkflow)
@@ -649,6 +689,18 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
                     # would coerce them into an object array.
                     if idiom_state is not None:
                         selected_op = idiom_state.select(ops_choices, rng)
+                    elif invertible_bias > 0.0:
+                        weights = [
+                            1.0 + invertible_bias
+                            if _predict_invertible(c['op'], c['args'], source_artifact)
+                            else 1.0
+                            for c in ops_choices
+                        ]
+                        total = sum(weights)
+                        probs = [w / total for w in weights]
+                        selected_op = ops_choices[
+                            int(rng.choice(len(ops_choices), p=probs))
+                        ]
                     else:
                         selected_op = ops_choices[int(rng.integers(0, len(ops_choices)))]
                     source_artifacts = [source_artifact]
@@ -780,6 +832,7 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
         'matfreq': matfreq,
         'file_format': file_format,
         'base_artifact': str(base_artifact) if base_artifact else None,
+        'invertible_bias': invertible_bias,
     }
 
     wf.serialize_workflow()

@@ -66,6 +66,10 @@ def main(argv=None):
     parser.add_argument('--grid', default=None,
                         help='JSON object overriding the parameter grid, e.g. '
                              '\'{"matfreq": [1, 3], "topology": ["star"]}\'')
+    parser.add_argument('--invertible_bias', type=float, default=None,
+                        help='Shorthand for --grid \'{"invertible_bias": [value]}\'. '
+                             'Up-weights invertible operators during generation. '
+                             'Overrides the invertible_bias entry in --grid if both are given.')
     parser.add_argument('--plan_only', action='store_true',
                         help='Print the workflow plan as JSON and exit without generating')
     parser.add_argument('--log', default='info', help='Logging level')
@@ -75,6 +79,9 @@ def main(argv=None):
                         format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
     grid = json.loads(options.grid) if options.grid else None
+    if options.invertible_bias is not None:
+        grid = dict(grid or {})
+        grid['invertible_bias'] = [options.invertible_bias]
     unknown = set(grid or {}) - set(DEFAULT_GRID)
     if unknown:
         parser.error(f'Unknown grid keys {sorted(unknown)}; expected a subset of '

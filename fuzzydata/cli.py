@@ -118,6 +118,12 @@ def setup_arguments(args):
                         help="JSON-encoded workflow engine options like sql_string or modin_engine",
                         type=str)
 
+    parser.add_argument("--invertible_bias",
+                        help="Up-weight operators that are invertible on the current artifact. "
+                             "0.0 (default) = uniform selection. Higher values (e.g. 5.0) "
+                             "increase the share of artifacts in non-trivial equivalence classes.",
+                        type=float, default=0.0)
+
     parser.add_argument("--exclude_ops",
                         help='JSON-encoded list of ops to exclude e.g. ["pivot"]',
                         type=str)
@@ -191,7 +197,8 @@ def main(args):
                                      exclude_ops=exclude_ops, matfreq=options.matfreq,
                                      seed=options.seed, topology=options.topology,
                                      base_artifact=options.base_artifact,
-                                     file_format=options.format)
+                                     file_format=options.format,
+                                     invertible_bias=options.invertible_bias)
 
         # Generate Workflow calls serialize at the end.
 
