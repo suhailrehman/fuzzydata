@@ -21,6 +21,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fuzzydata.clients import supported_workflows
 from fuzzydata.core.generator import generate_workflow
+from fuzzydata.core.workflow import Workflow
 
 _LOG_LEVELS = {
     'critical': logging.CRITICAL,
@@ -79,6 +80,20 @@ def setup_arguments(args):
     parser.add_argument("--matfreq",
                         help="Materialization frequency, i.e. how many operations before writing out an artifact",
                         type=int, default=1)
+
+    parser.add_argument("--seed",
+                        help="Integer seed for reproducible generation. The same seed yields "
+                             "the same graph, operations and artifact contents. Omit for "
+                             "nondeterministic generation.",
+                        type=int, default=None)
+
+    parser.add_argument("--topology",
+                        help="Parent-selection strategy: chain|star|balanced|"
+                             "random_recursive|bfactor. 'bfactor' (default) uses the "
+                             "exponential weighting controlled by --bfactor; the others "
+                             "select deterministically. Only these produce a true star or "
+                             "chain -- exponential weighting cannot.",
+                        type=str, default='bfactor', choices=list(Workflow.TOPOLOGIES))
 
     parser.add_argument("--log",
                         help="Set Logging Level",
@@ -162,7 +177,8 @@ def main(args):
                                      base_shape=(options.columns, options.rows),
                                      out_directory=options.output_dir, bfactor=options.bfactor,
                                      wf_options=wf_options,
-                                     exclude_ops=exclude_ops, matfreq=options.matfreq)
+                                     exclude_ops=exclude_ops, matfreq=options.matfreq,
+                                     seed=options.seed, topology=options.topology)
 
         # Generate Workflow calls serialize at the end.
 

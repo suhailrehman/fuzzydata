@@ -93,7 +93,8 @@ class Workflow(ABC):
                     'code': operation.code,
                 })
 
-    def generate_base_artifact(self, num_rows=100, num_cols=10, column_maps=None, label: str = None) -> Artifact:
+    def generate_base_artifact(self, num_rows=100, num_cols=10, column_maps=None, label: str = None,
+                               rng=None) -> Artifact:
         """
         Create a base artifact of with given rows and columns
         :param num_rows: number of rows to be generated
@@ -103,13 +104,13 @@ class Workflow(ABC):
         :return: Artifact after generation
         """
         if not column_maps:
-            column_maps = generate_schema(num_cols)
+            column_maps = generate_schema(num_cols, rng=rng)
         if not label:
             label = self.generate_next_label()
         start_time = time.perf_counter()
         new_artifact = self.initialize_new_artifact(label=label, filename=f"{self.artifact_dir}/{label}.csv",
                                                     schema_map=column_maps)
-        new_artifact.generate(num_rows, column_maps)
+        new_artifact.generate(num_rows, column_maps, rng=rng)
         end_time = time.perf_counter()
         self.add_artifact(new_artifact)
 
@@ -345,20 +346,73 @@ class Workflow(ABC):
         else:
             logger.warning('No Performance Data to be Written')
 
-    def select_random_artifact(self, bfactor=0.5, exclude: List[str] = None) -> Artifact:
+    #: Parent-selection strategies for workflow generation. See docs/topology.md for the
+    #: measured shape each one produces.
+    TOPOLOGIES = ('chain', 'star', 'balanced', 'random_recursive', 'bfactor')
+
+    #: Branching factor used by topology='balanced'. 2 gives a balanced binary tree, so
+    #: depth grows as log2(n) while out-degree stays capped.
+    BALANCED_BRANCHING_FACTOR = 2
+
+    def select_random_artifact(self, bfactor=1.0, exclude: List[str] = None, rng=None,
+                               topology: str = 'bfactor') -> Artifact:
         """
-        Select a random artifact from the current list of artifacts in this workflow
-        :param bfactor: Branching factor for exponential probablity in artifact selection (default 0.5)
-        :param exclude: List of artifacts to exclude from selection.
+        Select the parent artifact for the next operation.
+        :param bfactor: Branching factor, used only by topology='bfactor'. Weights artifact i
+            as exp(bfactor * i) over insertion order, so LOW values spread selection across
+            all existing artifacts (branchy) and HIGH values concentrate on the newest one
+            (a chain). Note this is the reverse of what fuzzydata <= 0.0.11 documented.
+        :param exclude: List of artifact labels to exclude from selection.
+        :param rng: np.random.Generator, for reproducible selection.
+        :param topology: one of TOPOLOGIES. 'bfactor' preserves the historical behaviour.
+            The others select deterministically, which is what makes a named shape
+            generatable at all -- exponential weighting cannot produce a true star.
         :return: Chosen artifact
         """
-        viable_artifacts = dict(filter(lambda x: x[0] not in exclude, self.artifact_dict.items()))
-        size = len(viable_artifacts)
-        a = np.arange(size)
-        prob = (bfactor / (np.exp(bfactor * size) - 1)) * np.exp(bfactor * a)
-        prob = prob / prob.sum()
+        from fuzzydata.core.generator import coerce_rng
+        rng = coerce_rng(rng)
+        exclude = exclude or ()
 
-        return self.artifact_dict[np.random.choice(list(viable_artifacts.keys()), 1, p=prob)[0]]
+        # dict preserves insertion order, so index == generation order.
+        viable_artifacts = {k: v for k, v in self.artifact_dict.items() if k not in exclude}
+        if not viable_artifacts:
+            raise ValueError('No viable artifacts remain to branch from')
+        labels = list(viable_artifacts)
+
+        if topology not in self.TOPOLOGIES:
+            raise ValueError(f'Unknown topology {topology!r}; expected one of {self.TOPOLOGIES}')
+
+        if topology == 'chain':
+            # Always extend the most recently created artifact -> depth n-1.
+            return viable_artifacts[labels[-1]]
+
+        if topology == 'star':
+            # Always branch from the oldest (root) artifact -> root out-degree n-1.
+            return viable_artifacts[labels[0]]
+
+        if topology == 'balanced':
+            # Fixed branching factor, filled breadth-first: take the OLDEST artifact that
+            # still has spare capacity. (Taking the artifact with fewest children instead
+            # degenerates to a chain -- only one artifact has out-degree 0 at any time, and
+            # it is always the newest one.)
+            for label in labels:
+                if self.graph.out_degree(label) < self.BALANCED_BRANCHING_FACTOR:
+                    return viable_artifacts[label]
+            return viable_artifacts[labels[0]]  # every node saturated; widen the root
+
+        if topology == 'random_recursive':
+            # Uniform over all existing artifacts -> a random recursive tree.
+            return viable_artifacts[labels[int(rng.integers(0, len(labels)))]]
+
+        # topology == 'bfactor': exponential weighting over insertion order.
+        # The historical leading constant bfactor/(exp(bfactor*size)-1) is cancelled by the
+        # normalisation below, and overflows to 0 (then nan) for large bfactor*size, so it is
+        # dropped. Subtracting the max first keeps exp() in range for large bfactor.
+        a = np.arange(len(labels))
+        weights = bfactor * a
+        prob = np.exp(weights - weights.max())
+        prob = prob / prob.sum()
+        return viable_artifacts[labels[int(rng.choice(len(labels), p=prob))]]
 
     def __len__(self):
         return len(self.artifact_list)

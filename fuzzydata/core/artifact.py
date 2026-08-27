@@ -38,10 +38,11 @@ class Artifact(ABC):
         logger.debug(f'New Artifact: {label}')
 
     @abstractmethod
-    def generate(self, num_rows, schema):
+    def generate(self, num_rows, schema, rng=None):
         """ Abstract method which invokes generate_table function and stores it somehow
         :param num_rows: Number of rows to be generated
         :param schema: Mapping of column_name: faker_provider for this artifact
+        :param rng: np.random.Generator, so generated values are reproducible under a seed
         """
 
     @abstractmethod

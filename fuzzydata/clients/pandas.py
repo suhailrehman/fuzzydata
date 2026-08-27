@@ -31,8 +31,8 @@ class DataFrameArtifact(Artifact):
         if from_df is not None:
             self.from_df(from_df)
 
-    def generate(self, num_rows, schema):
-        self.table = generate_table(num_rows, column_dict=schema, pd=self.pd)
+    def generate(self, num_rows, schema, rng=None):
+        self.table = generate_table(num_rows, column_dict=schema, pd=self.pd, rng=rng)
         self.schema_map = schema
         self.in_memory = True
 
@@ -53,7 +53,10 @@ class DataFrameArtifact(Artifact):
 
         if self.in_memory:
             serialization_method = getattr(self.table, self._serialization_function[self.file_format])
-            serialization_method(filename)
+            # index=False: to_csv writes the index by default, so every serialize/deserialize
+            # round-trip injected an "Unnamed: 0" column. That broke replay fidelity and put
+            # a phantom, perfectly-correlated column into every artifact written to disk.
+            serialization_method(filename, index=False)
 
     def destroy(self):
         del self.table
@@ -74,12 +77,18 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
 
     def apply(self, numeric_col: str, a: float, b: float) -> DataFrameArtifact:
         super(DataFrameOperation, self).apply(numeric_col, a, b)
-        new_col_name = f"{numeric_col}__{int(a)}x_{int(b)}"
-        return f'.assign({new_col_name} = lambda x: x.{numeric_col}*{a}+{b})'
+        new_col_name = self.apply_column_name(numeric_col, a, b)
+        # .assign(**{...}) with string keys and x["col"] indexing, rather than
+        # .assign(name = lambda x: x.col ...). Column prefixes are drawn from
+        # ascii_letters+digits, so a label can start with a digit (e.g. 62CZ7__pyfloat),
+        # which is not a valid Python identifier -- and this string is eval()'d.
+        return f'.assign(**{{"{new_col_name}": lambda x: x["{numeric_col}"]*{a}+{b}}})'
 
-    def sample(self, frac: float) -> DataFrameArtifact:
-        super(DataFrameOperation, self).sample(frac)
-        return f'.sample(frac={frac})'
+    def sample(self, frac: float, random_state: int = None) -> DataFrameArtifact:
+        super(DataFrameOperation, self).sample(frac, random_state)
+        if random_state is None:
+            return f'.sample(frac={frac})'
+        return f'.sample(frac={frac}, random_state={random_state})'
 
     def groupby(self, group_columns: List[str], agg_columns: List[str], agg_function: str) -> T:
         super(DataFrameOperation, self).groupby(group_columns, agg_columns, agg_function)
@@ -104,7 +113,9 @@ class DataFrameOperation(Operation['DataFrameArtifact']):
 
     def fill(self, col_name: str, old_value, new_value):
         super(DataFrameOperation, self).fill(col_name, old_value, new_value)
-        return f'.replace({{ "{col_name}": {old_value} }}, {new_value})'
+        # repr() here, not at the call site: this string is eval()'d, so the values need to
+        # be Python literals. The SQL client quotes the same raw values its own way.
+        return f'.replace({{ "{col_name}": {old_value!r} }}, {new_value!r})'
 
     def chain_operation(self, op, args):
         self.code += getattr(self, op)(**args)

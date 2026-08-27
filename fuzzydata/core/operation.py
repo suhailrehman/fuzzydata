@@ -40,7 +40,13 @@ class Operation(Generic[T], ABC):
 
         # Code Generation Variables
         self.code = ''
-        self.current_schema_map = self.sources[0].schema_map
+        # Copy, do not alias. apply() inserts a key into current_schema_map, and without a
+        # copy that mutated the SOURCE artifact's schema_map in place -- the parent then
+        # advertised a derived column it does not contain, and any later operation reading
+        # that schema emitted code referencing a nonexistent column. Every other operator
+        # rebuilds the dict, so apply was the only one that could trigger it, which is why
+        # this stayed hidden while apply was commented out of the generator.
+        self.current_schema_map = dict(self.sources[0].schema_map or {})
         self.num_operations = 0
         self.op_list = []  # List[Dict] of op names and args to chain together.
 
@@ -48,10 +54,29 @@ class Operation(Generic[T], ABC):
         """Add a source artifact to this operation. """
         self.sources.append(s_artifact)
 
+    @staticmethod
+    def apply_column_name(numeric_col: str, a, b) -> str:
+        """Name of the column that apply() derives. Defined once here because the ABC's
+        schema-map update and every client's emitted code must agree exactly. They did not:
+        the ABC and the sql client used {a}x_{b} while the pandas client used
+        int(a)x_int(b), so for non-integer scalars the schema map recorded a column name
+        that did not exist in the materialized dataframe.
+
+        The result must be a valid Python identifier: the pandas client emits
+        `.assign(<name> = lambda ...)` and that string is eval()'d, so a float scalar like
+        0.5 cannot appear verbatim.
+        """
+        def _fmt(v):
+            return f"{v}".replace('-', 'neg').replace('.', 'p')
+        return f"{numeric_col}__{_fmt(a)}x_{_fmt(b)}"
+
     @abstractmethod
-    def sample(self, frac: float) -> T:
+    def sample(self, frac: float, random_state: int = None) -> T:
         """ Sample frac proportion of rows from the source artifact
         :param frac: fraction [0.0,1.0] of rows to sample from the artifact
+        :param random_state: concrete seed for the draw. Emitted into the generated code and
+            persisted in the operation record, so replay reproduces the same rows. Without
+            it a serialized workflow advertised a replayability it did not have.
         :return:
         """
         self.current_schema_map = self.current_schema_map
@@ -65,8 +90,8 @@ class Operation(Generic[T], ABC):
         :param b: offset
         :return:
         """
-        self.current_schema_map = self.current_schema_map
-        self.current_schema_map[f"{numeric_col}__{a}x_{b}"] = self.current_schema_map[numeric_col]
+        self.current_schema_map[self.apply_column_name(numeric_col, a, b)] = \
+            self.current_schema_map[numeric_col]
         pass
 
     @abstractmethod

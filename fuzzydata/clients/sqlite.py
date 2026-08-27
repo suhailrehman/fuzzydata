@@ -48,9 +48,11 @@ class SQLArtifact(Artifact):
         with self.sql_engine.connect() as conn:
             return conn.execute(sql_code)
 
-    def generate(self, num_rows, schema):
-        df = generate_table(num_rows, column_dict=schema)
-        df.to_sql(self.label, con=self.sql_engine, if_exists='replace')
+    def generate(self, num_rows, schema, rng=None):
+        df = generate_table(num_rows, column_dict=schema, rng=rng)
+        # index=False for consistency with from_df(); otherwise an extra "index" column
+        # appears in the table and in every downstream SELECT *.
+        df.to_sql(self.label, con=self.sql_engine, if_exists='replace', index=False)
         self.schema_map = schema
         if self.sync_df:
             self.table = df
@@ -66,7 +68,7 @@ class SQLArtifact(Artifact):
             filename = self.filename
 
         df = self._deserialization_function[self.file_format](filename)
-        df.to_sql(self.label, con=self.sql_engine, if_exists='replace')
+        df.to_sql(self.label, con=self.sql_engine, if_exists='replace', index=False)
         if self.sync_df:
             self.table = df
         # self.in_memory = True
@@ -77,7 +79,7 @@ class SQLArtifact(Artifact):
 
         df = self.pd.read_sql(self._get_table, con=self.sql_engine)
         serialization_method = getattr(df, self._serialization_function[self.file_format])
-        serialization_method(filename)
+        serialization_method(filename, index=False)
 
     def destroy(self):
         if self.sync_df:
@@ -104,8 +106,13 @@ class SQLOperation(Operation['SQLArtifact']):
         }
         self.code = f"SELECT * FROM `{self.sources[0].label}`"
 
-    def sample(self, frac: float) -> SQLArtifact:
-        super(SQLOperation, self).sample(frac)
+    def sample(self, frac: float, random_state: int = None) -> SQLArtifact:
+        # random_state is accepted and recorded for parity with the pandas client, but
+        # SQLite's RANDOM() cannot be seeded without a custom UDF, so which rows come back
+        # is NOT reproducible here. The row COUNT is deterministic (ceil(n*frac)), which is
+        # what the replay test asserts for this client. Making SQL sampling seedable needs a
+        # different strategy (a deterministic hash ordering) and is deferred to Track B/B4.
+        super(SQLOperation, self).sample(frac, random_state)
         num_rows = len(self.sources[0])
         sample_rows = math.ceil(num_rows*frac)
         sql_sample_stmt = f"SELECT * FROM {{source}} ORDER BY RANDOM() " \
@@ -114,7 +121,7 @@ class SQLOperation(Operation['SQLArtifact']):
 
     def apply(self, numeric_col: str, a: float, b: float) -> SQLArtifact:
         super(SQLOperation, self).apply(numeric_col, a, b)
-        new_col_name = f"{numeric_col}__{a}x_{b}"
+        new_col_name = self.apply_column_name(numeric_col, a, b)
         sql_apply_stmt = f"SELECT *, (`{numeric_col}` * {a}) + {b} AS `{new_col_name}` " \
                          f"FROM {{source}}"
         return sql_apply_stmt
@@ -159,9 +166,19 @@ class SQLOperation(Operation['SQLArtifact']):
 
     def fill(self, col_name: str, old_value, new_value):
         super(SQLOperation, self).fill(col_name, old_value, new_value)
-        other_columns = ','.join([f"`{x}`" for x in list(set(self.current_schema_map.keys()) - set(col_name))])
-        sql_fill_stmt = f"SELECT {other_columns}, " \
-                        f"CASE WHEN `{col_name}` = '{old_value}' THEN '{new_value}' ELSE `{col_name}` END " \
+        # NB: was `set(col_name)`, which is the set of the string's characters -- the column
+        # was never actually excluded. Iterate the schema map in order so the projected
+        # column order is deterministic rather than set-iteration dependent.
+        other_cols = [f"`{x}`" for x in self.current_schema_map if x != col_name]
+        # Trailing comma would be a syntax error when col_name is the only column.
+        other_columns = (','.join(other_cols) + ',') if other_cols else ''
+        # SQL string literals: double any embedded single quote. Values arrive raw (the
+        # pandas client repr()s them for its own eval()'d code; we must not inherit that).
+        def _lit(v):
+            return "'" + str(v).replace("'", "''") + "'"
+        sql_fill_stmt = f"SELECT {other_columns} " \
+                        f"CASE WHEN `{col_name}` = {_lit(old_value)} THEN {_lit(new_value)} " \
+                        f"ELSE `{col_name}` END " \
                         f"AS `{col_name}` FROM {{source}}"
         return sql_fill_stmt
 

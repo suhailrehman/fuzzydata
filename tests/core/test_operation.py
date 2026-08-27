@@ -34,8 +34,10 @@ _operations = [
               'a': 0.5, 'b': 1.0}},
     {'op': 'fill',
      'args': {'col_name': '9YjpC__credit_card_provider',
-              'old_value': '"Visa"',
-              'new_value': '"RuPay"'}},
+              # Raw values: each client quotes for its own language (was pre-quoted for
+              # the pandas eval() path, which the sql client then double-quoted).
+              'old_value': 'Visa',
+              'new_value': 'RuPay'}},
     {'op': 'groupby',
      'args': {'group_columns': np.random.choice(_schema_type_mapping['groupable'], 2, replace=False).tolist(),
               'agg_columns': _schema_type_mapping['numeric'],
