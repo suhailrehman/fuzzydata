@@ -146,3 +146,5 @@ dask-worker-space/
 /dist/
 /build/
 *.egg-info/
+
+.claude/
