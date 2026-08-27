@@ -21,6 +21,12 @@ This project follows [Semantic Versioning](https://semver.org/). While the versi
 - **The `sql` client crashed on default settings.** Generating a SQL workflow required the
   caller to know to pass `exclude_ops=["pivot"]`; otherwise generation raised
   `NotImplementedError`. Clients now declare their own capabilities (see below).
+- **The shipped example workflow specs could not be replayed.** Both
+  `examples/sample_workflows/nyc-cab-small_operations.json` and
+  `nyc-cab/nyc-cab_operations.json` used `operation_list` as the *inner* per-operation key,
+  while `Operation.to_dict()` emits `op_list` and `Workflow.replay_op_list` reads
+  `opl['op_list']`. Replaying either raised `KeyError('op_list')`. (The *outer* key is
+  correctly `operation_list`; only the inner one was stale.)
 - **Nine tests had never executed.** `pytest-dependency` was used with static dependency
   names, which never resolve for parametrized tests and cause a silent skip rather than an
   error. As a result serialization, deserialization and replay were entirely untested.
@@ -50,6 +56,13 @@ This project follows [Semantic Versioning](https://semver.org/). While the versi
   previously claimed but never exercised.
 - `fuzzydata.clients.travis_workflows` renamed to `core_workflows`.
 - `pytest.ini` no longer enables `log_cli`, which emitted a log line per operation.
+- The `--bfactor` CLI help and the README both described the branching factor backwards.
+  Parent selection weights artifacts as `exp(bfactor * index)`, so low values are branchy
+  and high values produce a chain -- the reverse of what was documented through 0.0.11.
+  Note the CLI default is `5.0`, which is well into the chain-like regime.
+- Corrected the stale `OPS REQUIREMENTS` docstring in `core/generator.py`, which documented
+  four operations that do not exist (`assign_numeric`, `iloc`, `point_edit`, `dropcol`) and
+  omitted that `apply`, `select` and `fill` are implemented but never generated.
 
 ### Removed
 

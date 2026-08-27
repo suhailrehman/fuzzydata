@@ -69,7 +69,11 @@ def setup_arguments(args):
                         type=int, default=10)
 
     parser.add_argument("--bfactor",
-                        help="Workflow Branching factor, 0.1 is linear, 100 is star-like",
+                        help="Workflow branching factor. Parent selection weights artifacts "
+                             "as exp(bfactor * index), so LOW values spread new artifacts "
+                             "across all existing ones (branchy) while HIGH values almost "
+                             "always extend the newest artifact (a chain). Note this is the "
+                             "reverse of what releases up to 0.0.11 documented.",
                         type=float, default=5.0)
 
     parser.add_argument("--matfreq",

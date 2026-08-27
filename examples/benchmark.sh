@@ -5,6 +5,11 @@ nc=20
 nr=10000
 nv=10
 
+# NOTE: pivot is excluded during *pandas* generation on purpose. This workflow is replayed
+# against the sql client below, and SQLOperation cannot express a generic pivot. Each client
+# declares its own unsupported_ops, which generate_workflow applies automatically -- but that
+# only covers generating *with* that client, not replaying someone else's workflow on it. For
+# cross-client replay the generating client must restrict itself to the shared subset.
 python ../fuzzydata/cli.py --wf_client=pandas \
                             --output_dir=$outdir/pandas/ \
                             --columns=$nc --rows=$nr --version=$nv \

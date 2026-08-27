@@ -185,16 +185,23 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int,
 
     logger.debug(f"df_col_types: {df_col_types}")
     '''
-    OPS REQUIREMENTS
-    assign_numeric = one numeric col, random scalar value
-    assign_string = one string col
-    groupby = one groupable col, at least one numeric col, random aggregation function
-    iloc = two numbers, minimum 10 rows
-    sample = random DF fraction
-    point_edit = any column. old value, new value
-    dropcol = any column
-    merge = atleast one joinable column. new dataframe with that joinable column and its values. 
-    pivot = one index column, one groupable column and one numeric values column.
+    OPS REQUIREMENTS -- schema preconditions for each generatable operation.
+
+    Currently generated:
+      groupby = one groupable col, at least one numeric col, random aggregation function
+      pivot   = two groupable cols (index + columns) and one numeric values col.
+                Only emitted as the last op in a chain, and unsupported by the sql client
+                (see Operation.unsupported_ops).
+      merge   = at least one joinable col. The right-hand table is synthesised by
+                generate_pkfk_join_table(), not drawn from existing artifacts.
+      sample  = random DF fraction, minimum 10 rows
+      project = at least 3 columns in the schema
+
+    Implemented on Operation but NOT currently generated -- the branches below are
+    commented out, so no row-level map operation appears in generated workflows at all:
+      apply   = one numeric col, random scalar values (a, b)
+      select  = a row filter condition
+      fill    = any column, old value, new value
     '''
 
     if 'numeric' in df_col_types:
