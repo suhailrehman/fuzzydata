@@ -8,7 +8,7 @@ import numpy as np
 import logging
 
 from functools import partial
-from typing import Callable, Dict, List
+from typing import Callable, Collection, Dict, List, Optional
 
 import pandas as pd
 from faker import Faker
@@ -170,7 +170,8 @@ def generate_pkfk_join_table(source_table, source_schema: Dict['str', 'str'],
     return new_df, new_schema
 
 
-def generate_ops_choices(schema: Dict[str, str], num_rows: int, exclude: List[str]=[]) -> Dict[str, Dict]:
+def generate_ops_choices(schema: Dict[str, str], num_rows: int,
+                         exclude: Optional[Collection[str]] = None) -> Dict[str, Dict]:
     """
     Generate the a number of options for the next operation to be performed on a given table with schema and num_rows
     :param schema: Column Map
@@ -265,13 +266,14 @@ def generate_ops_choices(schema: Dict[str, str], num_rows: int, exclude: List[st
     #
 
     # Filter exclusion list of ops here
+    exclude = exclude or ()
     ops_choices = list(filter(lambda x: x['op'] not in exclude, ops_choices))
 
     return ops_choices
 
 
 def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10, 1000),
-                      out_directory='/tmp/dataset', bfactor=1.0, matfreq=1, wf_options={}, exclude_ops=[]):
+                      out_directory='/tmp/dataset', bfactor=1.0, matfreq=1, wf_options=None, exclude_ops=None):
     """
     Generate a workflow for a given client and parameters
     :param workflow_class: Workflow class to be used (DataFrameWorkflow, ModinWorkflow, or SQLWorkflow)
@@ -285,7 +287,17 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
     :param exclude_ops: List of string operations to be avoided during generation.
     :return: Workflow object of desired type.
     """
+    wf_options = wf_options or {}
+
+    # Copy the caller's exclusions: this function augments them per-operation below, and
+    # mutating the caller's list leaks exclusions across calls.
+    user_exclude_ops = set(exclude_ops or [])
+
     wf = workflow_class(name=name, out_directory=out_directory, **wf_options)
+
+    # Ops this client cannot express at all, excluded up front rather than raising mid-run.
+    user_exclude_ops |= set(wf.operator_class.unsupported_ops)
+
     wf.generate_base_artifact(num_cols=base_shape[0], num_rows=base_shape[1])
 
     num_generated = len(wf.artifact_list)
@@ -306,12 +318,15 @@ def generate_workflow(workflow_class, name='wf', num_versions=10, base_shape=(10
             # current_schema_map = source_artifact.schema_map
 
             while num_ops < ops_to_do:
-                if num_ops != ops_to_do-1:  # Do not pivot in the middle of an operation chain
-                    exclude_ops.append('pivot')
+                # Do not pivot in the middle of an operation chain. Scoped to this iteration
+                # only -- accumulating into the shared list would exclude pivot permanently.
+                step_exclude_ops = set(user_exclude_ops)
+                if num_ops != ops_to_do-1:
+                    step_exclude_ops.add('pivot')
 
                 ops_choices = generate_ops_choices(schema=wf.current_operation.current_schema_map,
                                                    num_rows=len(source_artifact), # TODO: potential num_rows bug
-                                                   exclude=exclude_ops)
+                                                   exclude=step_exclude_ops)
 
                 if ops_choices:
                     logger.debug(f'Ops Choices: {ops_choices}')

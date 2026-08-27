@@ -4,12 +4,13 @@ from copy import deepcopy
 from fuzzydata.clients.pandas import DataFrameWorkflow
 from fuzzydata.clients.sqlite import SQLWorkflow
 
-travis_workflows = {
+#: Clients whose dependencies are always installed with fuzzydata.
+core_workflows = {
     'pandas': DataFrameWorkflow,
     'sql': SQLWorkflow
 }
 
-supported_workflows = deepcopy(travis_workflows)
+supported_workflows = deepcopy(core_workflows)
 
 modin_spec = importlib.util.find_spec('modin')
 if modin_spec:

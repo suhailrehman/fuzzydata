@@ -1,3 +1,28 @@
+# -*- coding: utf-8 -*-
+
+"""
+fuzzydata.clients.modin
+~~~~~~~~~~~~
+
+DEPRECATED as of 0.1.0, and not covered by CI.
+
+This client is a thin subclass of the pandas client -- both ModinArtifact and ModinWorkflow
+reuse DataFrameOperation verbatim, so all transformation and code-generation logic is
+exercised by the pandas tests. What is *not* exercised is this module's own glue, because
+ModinWorkflow.__init__ starts a dask.distributed cluster (or a ray runtime) on construction,
+which is too heavy and too flaky to run in CI.
+
+The client still ships and still works; it is simply unsupported. To exercise it:
+
+    pip install 'fuzzydata[modin]'
+    FUZZYDATA_TEST_MODIN=1 pytest
+
+:copyright: (c) Suhail Rehman 2022
+:license: MIT, see LICENSE for more details.
+"""
+
+import warnings
+
 import modin.pandas as mpd
 from modin.config import Engine
 
@@ -22,6 +47,12 @@ class ModinArtifact(DataFrameArtifact):
 
 class ModinWorkflow(DataFrameWorkflow):
     def __init__(self, *args, **kwargs):
+        warnings.warn(
+            'The fuzzydata modin client is deprecated as of 0.1.0 and is not covered by '
+            'CI. It still works, but is unsupported; prefer the pandas or sql clients.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.modin_engine = kwargs.pop('modin_engine', 'dask')
         super(ModinWorkflow, self).__init__(*args, **kwargs)
         self.artifact_class = ModinArtifact

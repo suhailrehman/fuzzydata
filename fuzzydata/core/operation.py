@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 
 class Operation(Generic[T], ABC):
 
+    #: Operations this client cannot express. Declared per-client so the generator can
+    #: exclude them up front instead of discovering them via NotImplementedError mid-run.
+    unsupported_ops = frozenset()
+
     def __init__(self, sources: List[Artifact]):
         """Initialize a new operation with a list of source artifacts
         :param sources: List of source artifacts for this operation.

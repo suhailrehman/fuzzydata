@@ -93,6 +93,9 @@ class SQLArtifact(Artifact):
 
 class SQLOperation(Operation['SQLArtifact']):
 
+    #: Generic pivots have no portable SQL expression; see pivot() below.
+    unsupported_ops = frozenset({'pivot'})
+
     def __init__(self, *args, **kwargs):
         self.artifact_class = kwargs.pop('artifact_class', SQLArtifact)
         super(SQLOperation, self).__init__(*args, **kwargs)
@@ -167,6 +170,9 @@ class SQLOperation(Operation['SQLArtifact']):
         logger.debug(f'Code before chaining: {self.code}')
         self.code = new_code.replace('{source}', f'({self.code})')
         logger.debug(f'Code after chaining: {self.code}')
+        # Must run after code generation: records op_list metadata used by the JSON spec
+        # and by replay. Without it SQL workflows serialize with an empty op_list.
+        super(SQLOperation, self).chain_operation(op, args)
 
     def materialize(self, new_label):
         super(SQLOperation, self).materialize(new_label)
