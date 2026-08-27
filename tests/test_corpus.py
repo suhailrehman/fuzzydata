@@ -222,3 +222,33 @@ def test_unknown_policy_and_grid_keys_are_rejected(tmp_path):
         generate_workflow(DataFrameWorkflow, name='bad', num_versions=3,
                           base_shape=(8, 100), out_directory=str(tmp_path),
                           operator_policy='nonsense')
+
+
+# ---- issue #16: measured topology fields in manifest rows --------------------------
+
+def test_manifest_row_has_measured_topology_fields(tmp_path):
+    """Each manifest row must carry measured graph shape and equivalence class stats."""
+    manifest = generate_corpus(
+        output_dir=str(tmp_path),
+        num_workflows=3,
+        base_seed=7,
+        grid={'num_versions': [6], 'matfreq': [1], 'topology': ['chain'],
+              'operator_policy': ['schema_constrained'], 'bfactor': [1.0]},
+        base_shape=(8, 200),
+        file_format='parquet',
+    )
+    int_fields = ('depth', 'max_out_degree', 'num_leaves', 'num_roots',
+                  'invertible_edge_count', 'stochastic_edge_count', 'augmenting_edge_count')
+    for row in manifest['workflows']:
+        if row.get('status') != 'ok':
+            continue
+        for f in int_fields:
+            assert f in row, f'missing {f} in manifest row'
+            assert isinstance(row[f], int), f'{f} should be int, got {type(row[f])}'
+        assert 'composition_depth_histogram' in row
+        assert isinstance(row['composition_depth_histogram'], dict)
+        assert 'class_size_histogram' in row
+        assert isinstance(row['class_size_histogram'], dict)
+        # chain topology: depth == num_artifacts - 1 (excluding merge-free runs)
+        assert row['depth'] >= 1
+        assert row['num_roots'] == 1

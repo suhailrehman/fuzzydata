@@ -17,6 +17,7 @@ multiprocessing completion order varies, and an unsorted manifest would not be c
 between runs.
 """
 
+import collections
 import importlib.metadata
 import itertools
 import json
@@ -197,6 +198,43 @@ def _generate_one(job: Dict) -> Dict:
         except Exception as e:
             logger.warning(f'Could not describe seed table {spec["base_artifact"]}: {e}')
 
+    import networkx as nx
+    from fuzzydata.lineage.equivalence import compute_equivalence_classes
+
+    graph = workflow.graph
+    measured = {
+        'depth': nx.dag_longest_path_length(graph) if graph.number_of_nodes() > 1 else 0,
+        'max_out_degree': max((d for _, d in graph.out_degree()), default=0),
+        'num_leaves': sum(1 for _, d in graph.out_degree() if d == 0),
+        'num_roots': sum(1 for _, d in graph.in_degree() if d == 0),
+        'invertible_edge_count': sum(
+            1 for op in workflow.operation_list
+            if op.get('annotation', {}).get('invertible_on_input')
+        ),
+        'stochastic_edge_count': sum(
+            1 for op in workflow.operation_list
+            if op.get('annotation', {}).get('stochastic')
+        ),
+        'augmenting_edge_count': sum(
+            1 for op in workflow.operation_list
+            if op.get('annotation', {}).get('augmenting')
+        ),
+        'composition_depth_histogram': dict(
+            collections.Counter(
+                op.get('annotation', {}).get('composition_depth', 1)
+                for op in workflow.operation_list
+            )
+        ),
+    }
+    try:
+        eq_classes = compute_equivalence_classes(workflow)
+        measured['class_size_histogram'] = dict(
+            collections.Counter(eq_classes.values())
+        )
+    except Exception as e:
+        logger.warning(f'Could not compute equivalence classes for {spec["workflow_id"]}: {e}')
+        measured['class_size_histogram'] = {}
+
     row.update({
         'status': 'ok',
         'idiom': (workflow.metadata or {}).get('idiom'),
@@ -205,6 +243,7 @@ def _generate_one(job: Dict) -> Dict:
         'operator_histogram': dict(sorted(histogram.items())),
         'category_histogram': dict(sorted(categories.items())),
         'validity': workflow_validity_summary(workflow),
+        **measured,
     })
     if seed_descriptor is not None:
         row['seed_descriptor'] = seed_descriptor
