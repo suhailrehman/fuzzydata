@@ -18,8 +18,9 @@
       "merge": 2,
       "normalize": 2,
       "one_hot_encode": 1,
+      "project": 1,
       "rename": 1,
-      "sample": 2
+      "sample": 1
     },
     "max_depth": 5,
     "max_out_degree": 2,

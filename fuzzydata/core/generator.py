@@ -84,7 +84,12 @@ def generate_inverse_function_dict(function_dict):
 
 _gen_functions = load_function_dict()
 logger.debug(_gen_functions)
-_faker_cols = list(set(chain(*_gen_functions.values())))
+# sorted(), not list(set(...)): set iteration order over strings is randomised per process
+# by PYTHONHASHSEED, so an unsorted list made generate_schema() pick different providers for
+# the same seed in different processes. That silently broke the cross-process reproducibility
+# that --seed and the corpus driver both promise -- and it hid from a same-process test,
+# because forked corpus workers inherit the parent's hash seed.
+_faker_cols = sorted(set(chain(*_gen_functions.values())))
 _inv_gen_functions = generate_inverse_function_dict(_gen_functions)
 
 

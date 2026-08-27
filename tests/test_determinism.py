@@ -8,6 +8,7 @@ import glob
 import hashlib
 import json
 import logging
+import os
 
 import pandas as pd
 import pytest
@@ -31,6 +32,7 @@ def _content_hash(df: pd.DataFrame) -> str:
 
 
 def _generate(tmp_path, seed, name='det', **kwargs):
+    kwargs.setdefault('validate', 'off')
     return generate_workflow(DataFrameWorkflow, name=name, num_versions=NUM_VERSIONS,
                              base_shape=BASE_SHAPE, out_directory=str(tmp_path),
                              matfreq=2, seed=seed, **kwargs)
@@ -85,6 +87,47 @@ def test_stochastic_ops_record_their_seed(tmp_path):
     assert code
     emitted = open(code[0]).read()
     assert 'random_state=' in emitted
+
+
+@pytest.mark.parametrize('hashseed', ['1', '424242'])
+def test_seed_reproducibility_across_processes(tmp_path, hashseed):
+    """The same seed must reproduce the same workflow in a DIFFERENT process.
+
+    This is not the same guarantee as test_seed_reproducibility, and the difference is not
+    academic: any hash-order-dependent construct (a `list(set(...))` of strings) is stable
+    within one process and varies between processes, because PYTHONHASHSEED is randomised per
+    interpreter. A same-process test cannot see it, and neither can a multiprocessing test --
+    forked workers inherit the parent's hash seed. Exactly that bug shipped in
+    generator._faker_cols.
+    """
+    import subprocess
+    import sys
+
+    script = f"""
+import json, logging, tempfile
+logging.disable(logging.CRITICAL)
+from fuzzydata.clients.pandas import DataFrameWorkflow
+from fuzzydata.core.generator import generate_workflow
+wf = generate_workflow(DataFrameWorkflow, name='xp', num_versions={NUM_VERSIONS},
+                       base_shape={BASE_SHAPE}, out_directory=tempfile.mkdtemp(),
+                       matfreq=2, seed={SEED}, validate='off')
+hist = {{}}
+for op in wf.operation_list:
+    for entry in op['op_list']:
+        hist[entry['op']] = hist.get(entry['op'], 0) + 1
+print(json.dumps({{'labels': list(wf.artifact_list),
+                  'edges': sorted(wf.graph.edges()),
+                  'hist': hist}}, sort_keys=True))
+"""
+    env = {**os.environ, 'PYTHONHASHSEED': hashseed}
+    result = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True,
+                            env=env, cwd=os.getcwd())
+    assert result.returncode == 0, result.stderr[-2000:]
+    produced = json.loads(result.stdout.strip().splitlines()[-1])
+
+    reference = _fingerprint(_generate(tmp_path, SEED, name='xp'))
+    assert produced['labels'] == reference['artifacts']
+    assert [list(e) for e in produced['edges']] == [list(e) for e in reference['edges']]
 
 
 def test_replay_reproduces_artifacts(tmp_path):
