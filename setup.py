@@ -18,11 +18,17 @@ setup(
     },
     classifiers=[
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
     packages=find_packages(),
-    python_requires=">=3.7",
+    # Aligned with the CI matrix floor. 3.7/3.8 were claimed but never tested.
+    python_requires=">=3.9",
     include_package_data=True,
     install_requires=[
         'faker>=13.3.0',

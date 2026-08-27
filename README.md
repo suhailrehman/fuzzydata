@@ -33,10 +33,16 @@ Manual build/install using pip.
 pip install fuzzydata
 ```
 
-`fuzzydata` Does not install `modin` or `SQLAlchemy` by default, but this can be specified as an install option:
+`SQLAlchemy` is a required dependency and is always installed. The only optional extra is
+`modin`:
 ```bash
-pip install fuzzydata[modin|sql|all]
+pip install fuzzydata[modin]
 ```
+
+> **The `modin` client is deprecated as of 0.1.0 and is not covered by CI.** It still ships
+> and still works, but is unsupported. `ModinWorkflow` starts a dask (or ray) cluster on
+> construction, which is impractical to test in CI, and the client is a thin subclass of the
+> pandas client. Prefer `pandas` or `sql`.
 
 ## Usage
 
@@ -47,7 +53,7 @@ to get a list of command-line options supported in fuzzydata
 $ fuzzydata --help
 usage: fuzzydata [-h] [--wf_client WF_CLIENT] [--output_dir OUTPUT_DIR] [--wf_name WF_NAME]
               [--columns COLUMNS] [--rows ROWS] [--versions VERSIONS] [--bfactor BFACTOR]
-              [--matfreq MATFREQ] [--npp NPP] [--log LOG] [--replay_dir REPLAY_DIR]
+              [--matfreq MATFREQ] [--log LOG] [--replay_dir REPLAY_DIR]
               [--wf_options WF_OPTIONS] [--exclude_ops EXCLUDE_OPS] [--scale_artifact SCALE_ARTIFACT]
 
 optional arguments:
@@ -60,7 +66,11 @@ optional arguments:
   --columns COLUMNS     Number of columns in the base version
   --rows ROWS           Number of rows in the base version
   --versions VERSIONS   Number of artifact versions to generate
-  --bfactor BFACTOR     Workflow Branching factor, 0.1 is linear, 100 is star-like
+  --bfactor BFACTOR     Workflow branching factor. Parent selection weights artifacts as
+                        exp(bfactor * index), so LOW values spread new artifacts across all
+                        existing ones (branchy) and HIGH values almost always extend the
+                        newest artifact (a chain). Note this is the reverse of what releases
+                        up to 0.0.11 documented.
   --matfreq MATFREQ     Materialization frequency, i.e. how many operations before writing out an artifact
   --log LOG             Set Logging Level
   --replay_dir REPLAY_DIR

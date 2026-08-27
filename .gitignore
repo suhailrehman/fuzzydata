@@ -138,3 +138,6 @@ dask-worker-space/
 
 #vscode
 .vscode
+
+# JetBrains IDE
+.idea/

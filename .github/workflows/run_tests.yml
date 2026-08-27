@@ -1,60 +1,48 @@
-name: Build Tests
+name: tests
 
 on:
+  # Restricted to main: pull_request already covers feature branches, so this avoids
+  # running the whole suite twice for every pushed commit on a PR.
   push:
-    paths: ["fuzzydata/**", "tests/**", ".github/workflows/run_tests.yml"]
-
+    branches: [main]
   pull_request:
-    paths: ["fuzzydata/**", "tests/**", ".github/workflows/run_tests.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-#   linter:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout Code Repository
-#         uses: actions/checkout@v4
-
-#       - name: Set up Python
-#         uses: actions/setup-python@v4
-#         with:
-#           python-version: '3.10'
-
-#       - name: Run pre-commit
-#         uses: pre-commit/action@v3.0.0
-#         with:
-#           extra_args: --files projects/go/src/* projects/go/tests/*
-
-#   mypy:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout Code Repository
-#         uses: actions/checkout@v4
-
-#       - name: Set up Python
-#         uses: actions/setup-python@v4
-#         with:
-#           python-version: '3.10'
-
-#       - name: Install dependencies
-#         run: pip3 install -r projects/go/requirements.txt
-
-#       - name: Run mypy
-#         run: mypy src/*.py tests/*.py
-#         working-directory: projects/go/
-
   pytest:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        # Floor + newest. The floor leg catches syntax/typing that newer versions accept
+        # (e.g. `str | None` annotations, which are a runtime error on 3.9).
+        python-version: ['3.9', '3.13']
+
     steps:
-      - name: Checkout Code Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: ${{ matrix.python-version }}
+          cache: pip
 
+      # requirements.txt deliberately excludes modin[all], which would install both dask
+      # and ray. The modin client is deprecated and excluded from the suite.
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
 
-      - name: Run pytest
-        run: pytest -v
+      - name: Run tests
+        run: pytest -q --cov=fuzzydata --cov-report=xml
+
+      - name: Upload coverage
+        if: matrix.python-version == '3.9'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

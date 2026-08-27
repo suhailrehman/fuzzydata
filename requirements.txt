@@ -1,8 +1,12 @@
+# Runtime dependencies. Keep in sync with install_requires in setup.py.
 faker
 pandas
 networkx
+SQLAlchemy>=2.0.0
+
+# Test dependencies. The modin client is deprecated and excluded from the suite, so
+# modin[all] (which pulls in both dask and ray) is deliberately NOT installed here.
+# To exercise it manually: pip install '.[modin]' && FUZZYDATA_TEST_MODIN=1 pytest
 pytest
 pytest-cov
-pre-commit
-SQLAlchemy>=2.0.0
-modin[all]
+pytest-dependency
