@@ -3,6 +3,8 @@ import os.path
 import logging
 import pytest
 
+from pytest_dependency import depends
+
 from fuzzydata.core.artifact import Artifact
 from tests.conftest import workflow_fixtures
 
@@ -30,9 +32,11 @@ def test_generate_base_artifact(abstract_workflow, request):
     assert new_label in workflow.graph.nodes()
 
 
-@pytest.mark.dependency(depends=['test_generate_base_artifact'])
+@pytest.mark.dependency()
 @pytest.mark.parametrize('abstract_workflow', workflow_fixtures)
 def test_generate_artifact_from_operation_list(abstract_workflow, request):
+    # Parametrized dependencies must name the same-parameter instance; see test_artifact.py.
+    depends(request, [f'test_generate_base_artifact[{abstract_workflow}]'])
     workflow = request.getfixturevalue(abstract_workflow)
     previous_len = len(workflow)
     source_label = workflow.artifact_list[-1]
@@ -44,9 +48,10 @@ def test_generate_artifact_from_operation_list(abstract_workflow, request):
     assert new_label in workflow.graph.nodes()
 
 
-@pytest.mark.dependency(depends=['test_generate_artifact_from_operation'])
+@pytest.mark.dependency()
 @pytest.mark.parametrize('abstract_workflow', workflow_fixtures)
 def test_serialize_deserialize_workflow(abstract_workflow, request, tmpdir_factory):
+    depends(request, [f'test_generate_artifact_from_operation_list[{abstract_workflow}]'])
     workflow = request.getfixturevalue(abstract_workflow)
     output_path = tmpdir_factory.mktemp(workflow.name)
     logger.info(f'Output Dir {output_path}')

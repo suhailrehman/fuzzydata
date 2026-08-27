@@ -63,30 +63,40 @@ _merge_operation = {
 
 @pytest.mark.parametrize('artifact, op_dict', itertools.product(static_artifact_fixtures, _operations))
 def test_single_operations(artifact, request, op_dict):
-    try:
-        concrete_artifact = request.getfixturevalue(artifact)
-        op, args = op_dict['op'], op_dict['args']
-        logger.info(f'Testing: {op} operation on {concrete_artifact.__class__} instance')
-        sample_op = concrete_artifact.operation_class(sources=[concrete_artifact])
-        sample_op.chain_operation(op, args)
-        sample_op.execute(f'after_{op}')
+    concrete_artifact = request.getfixturevalue(artifact)
+    op, args = op_dict['op'], op_dict['args']
+    operation_class = concrete_artifact.operation_class
 
-    except NotImplementedError as e:
-        logger.warning('Warning: {op} operation on {concrete_artifact.__class__} instance not implemented')
+    if op in operation_class.unsupported_ops:
+        pytest.skip(f'{op} is declared unsupported by {operation_class.__name__}')
+
+    logger.info(f'Testing: {op} operation on {concrete_artifact.__class__} instance')
+    sample_op = operation_class(sources=[concrete_artifact])
+    sample_op.chain_operation(op, args)
+    result = sample_op.execute(f'after_{op}')
+
+    # An op that is not declared unsupported must actually produce an artifact. Previously a
+    # NotImplementedError here was caught and logged, so a broken op passed silently.
+    assert result is not None
+    assert sample_op.op_list == [{'op': op, 'args': args}]
 
 
 @pytest.mark.parametrize('artifact', static_artifact_fixtures)
 def test_operation_chain(artifact, request):
-    try:
-        concrete_artifact = request.getfixturevalue(artifact)
-        sample_op = concrete_artifact.operation_class(sources=[concrete_artifact])
-        op_list = _operations[:3]
-        logger.info(f'Testing: {op_list} operations on {concrete_artifact.__class__} instance')
-        for op_dict in op_list:
-            sample_op.chain_operation(op_dict['op'], op_dict['args'])
-        sample_op.execute(f'after')
-    except NotImplementedError as e:
-        logger.warning('Warning: {op} operation on {concrete_artifact.__class__} instance not implemented')
+    concrete_artifact = request.getfixturevalue(artifact)
+    operation_class = concrete_artifact.operation_class
+    op_list = [o for o in _operations[:3] if o['op'] not in operation_class.unsupported_ops]
+
+    sample_op = operation_class(sources=[concrete_artifact])
+    logger.info(f'Testing: {op_list} operations on {concrete_artifact.__class__} instance')
+    for op_dict in op_list:
+        sample_op.chain_operation(op_dict['op'], op_dict['args'])
+    result = sample_op.execute('after')
+
+    assert result is not None
+    # op_list metadata must survive chaining, or the serialized spec cannot be replayed.
+    assert sample_op.op_list == op_list
+    assert sample_op.num_operations == len(op_list)
 
 
 @pytest.mark.parametrize('source_artifact', static_artifact_fixtures)

@@ -6,19 +6,14 @@ import os
 import pandas as pd
 import pytest
 
-from fuzzydata.clients import supported_workflows, SQLWorkflow, travis_workflows, DataFrameWorkflow, ModinWorkflow
+from fuzzydata.clients import core_workflows
 from fuzzydata.core.generator import generate_schema, generate_table, generate_workflow
 
 logger = logging.getLogger(__name__)
 
-# Skipping modin tests on travis for time and existing modin error
-# https://github.com/modin-project/modin/issues/4287
-if "TRAVIS" in os.environ and os.environ["TRAVIS"] == "true":
-    workflows_to_test = travis_workflows.values()
-else:
-    # Skipping modin tests
-    # workflows_to_test = supported_workflows.values()
-    workflows_to_test = travis_workflows.values()
+# pandas + sql only. The modin client is deprecated and excluded from the suite; see the
+# rationale in tests/conftest.py.
+workflows_to_test = list(core_workflows.values())
 
 
 @pytest.fixture(scope="module", params=[10, 15, 20])
@@ -44,13 +39,10 @@ def test_generate_table(schema, num_rows):
 def test_generate_workflow(wf_class, num_versions, base_shape, tmpdir_factory):
     try:
         output_path = tmpdir_factory.mktemp(f'test_{wf_class.__name__}')
-        # Exclude pivots from SQLWorkflow test
-        if wf_class.__name__ == 'SQLWorkflow':
-            exclude = ['pivot']
-        else:
-            exclude = []
+        # No manual exclusions: each client declares its own unsupported_ops, which
+        # generate_workflow applies. SQL's inability to pivot must be handled there.
         workflow = generate_workflow(wf_class, name=f'test_{wf_class.__name__}', num_versions=num_versions,
-                                     base_shape=base_shape, out_directory=output_path, exclude_ops=exclude, matfreq=2)
+                                     base_shape=base_shape, out_directory=output_path, matfreq=2)
 
         assert len(workflow) == num_versions
         assert os.path.exists(f"{output_path}/artifacts/")

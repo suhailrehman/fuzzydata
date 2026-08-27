@@ -1,14 +1,26 @@
 import logging
+import os
+
 import pytest
 import sqlalchemy
-import modin.pandas
 
-from fuzzydata.clients.modin import ModinArtifact, ModinWorkflow
 from fuzzydata.clients.sqlite import SQLArtifact, SQLWorkflow
 from fuzzydata.clients.pandas import DataFrameArtifact, DataFrameWorkflow
 from fuzzydata.core.generator import generate_schema
 
 logger = logging.getLogger(__name__)
+
+# The modin client is deprecated and untested as of 0.1.0. It is excluded here by explicit
+# opt-in rather than by install-detection, because ModinWorkflow.__init__ unconditionally
+# starts a dask.distributed cluster (or ray runtime). That cluster is shared for the whole
+# pytest session and, once a worker dies, every later modin test fails inside dask rather
+# than inside fuzzydata. Gating on the env var means modin/dask/ray are never even imported.
+#
+# To exercise the modin client manually before a release (never in CI):
+#     FUZZYDATA_TEST_MODIN=1 pytest
+RUN_MODIN_TESTS = os.environ.get('FUZZYDATA_TEST_MODIN', '').lower() in ('1', 'true', 'yes')
+if RUN_MODIN_TESTS:
+    from fuzzydata.clients.modin import ModinArtifact, ModinWorkflow
 
 _static_schema_test = {'EafKN__rgb_color': 'rgb_color',
                        'RFD4U__uuid4': 'uuid4',
@@ -25,10 +37,18 @@ _static_schema_test = {'EafKN__rgb_color': 'rgb_color',
                        'mRIWF__postalcode_in_state': 'postalcode_in_state',
                        '9YjpC__credit_card_provider': 'credit_card_provider'}
 
-artifact_fixtures = ['dataframe_artifact', 'sql_artifact', 'modin_artifact']
-generated_artifact_fixtures = ['dataframe_artifact_generated', 'sql_artifact_generated', 'modin_artifact_generated']
-static_artifact_fixtures = ['dataframe_artifact_static', 'sql_artifact_static', 'modin_artifact_static']
-workflow_fixtures = ['df_workflow', 'sql_workflow', 'modin_workflow']
+def _with_modin(fixtures, modin_fixture):
+    """Append the modin fixture only under FUZZYDATA_TEST_MODIN, so by default no modin
+    parameter is generated and no modin test exists to run."""
+    return fixtures + ([modin_fixture] if RUN_MODIN_TESTS else [])
+
+
+artifact_fixtures = _with_modin(['dataframe_artifact', 'sql_artifact'], 'modin_artifact')
+generated_artifact_fixtures = _with_modin(['dataframe_artifact_generated', 'sql_artifact_generated'],
+                                          'modin_artifact_generated')
+static_artifact_fixtures = _with_modin(['dataframe_artifact_static', 'sql_artifact_static'],
+                                       'modin_artifact_static')
+workflow_fixtures = _with_modin(['df_workflow', 'sql_workflow'], 'modin_workflow')
 
 
 @pytest.fixture(scope="session")
