@@ -1,0 +1,12 @@
+# Exact package versions used to generate the reference corpus.
+# Install with: pip install -r constraints-corpus.txt
+# Then regenerate with: fuzzydata-corpus generate --seed <base_seed> ...
+#
+# See docs/lineage_corpus.md for the full regeneration procedure.
+# Updated for fuzzydata 0.1.1 (2026-08-27).
+
+faker==37.0.0
+pandas==2.3.3
+numpy==1.24.3
+pyarrow==25.0.1
+networkx==3.4.2

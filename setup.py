@@ -37,12 +37,13 @@ setup(
     python_requires=">=3.9",
     include_package_data=True,
     install_requires=[
-        'faker>=13.3.0',
-        'pandas>=1.4.0',
-        'networkx>=2.7',
+        'faker>=13.3.0,<38',
+        'pandas>=1.4.0,<3.1',
+        'numpy>=1.23.0,<2.1',
+        'networkx>=2.7,<4',
         # parquet is the recommended artifact format for corpus generation: csv round-trips
         # every value through text, so dtypes survive only by inference.
-        'pyarrow>=10.0.0',
+        'pyarrow>=10.0.0,<26',
     ],
     extras_require={
         # pip install fuzzydata[sql]  -- enables the SQLite/SQLAlchemy client

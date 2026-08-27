@@ -17,11 +17,14 @@ multiprocessing completion order varies, and an unsorted manifest would not be c
 between runs.
 """
 
+import importlib.metadata
 import itertools
 import json
 import logging
 import multiprocessing
 import os
+import platform
+import sys
 import traceback
 from typing import Dict, List, Optional, Sequence
 
@@ -30,6 +33,26 @@ import numpy as np
 from fuzzydata.lineage.validity import workflow_validity_summary
 
 logger = logging.getLogger(__name__)
+
+
+def _build_environment() -> Dict:
+    """Snapshot of the generating environment for manifest reproducibility."""
+    def _ver(pkg):
+        try:
+            return importlib.metadata.version(pkg)
+        except importlib.metadata.PackageNotFoundError:
+            return None
+
+    return {
+        'fuzzydata': _ver('fuzzydata'),
+        'python': platform.python_version(),
+        'platform': platform.platform(),
+        'pandas': _ver('pandas'),
+        'numpy': _ver('numpy'),
+        'pyarrow': _ver('pyarrow'),
+        'networkx': _ver('networkx'),
+    }
+
 
 #: Grid dimensions expanded by expand_grid(), in a fixed order so the expansion is stable.
 GRID_KEYS = ('num_versions', 'matfreq', 'topology', 'operator_policy', 'bfactor')
@@ -221,6 +244,7 @@ def generate_corpus(output_dir: str, num_workflows: int = 10, base_seed: int = 0
     manifest = {
         'base_seed': base_seed,
         'client': client,
+        'environment': _build_environment(),
         'file_format': file_format,
         'num_workflows': num_workflows,
         'distractor_pool': distractor_pool,
